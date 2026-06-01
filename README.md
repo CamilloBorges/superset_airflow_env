@@ -3,7 +3,8 @@
 Ambiente completo de Business Intelligence e Engenharia de Dados baseado em containers Docker, seguindo o princípio de **Infrastructure as Code (IaC)**.
 
 > 🚀 **Início Rápido?** Consulte [QUICKSTART.md](QUICKSTART.md) para setup em 5 minutos  
-> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para guia completo
+> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para guia completo  
+> 🌩️ **Usando Azure?** Consulte [AZURE_SETUP.md](AZURE_SETUP.md) para configurar NSG e portas  > 🔒 **Precisa de HTTPS?** Consulte [HTTPS_SETUP.md](HTTPS_SETUP.md) para configurar SSL/TLS  > 🔐 **Quer SSO com Azure Entra ID?** Consulte [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md) para configurar autenticação única
 
 ## 🏗️ Arquitetura da Stack
 

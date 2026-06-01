@@ -10,6 +10,9 @@ Guia completo de toda a documentação disponível neste projeto.
 |-----------|-------------|----------------|
 | **[QUICKSTART.md](QUICKSTART.md)** | Você já tem Docker instalado e quer começar rapidamente | ⚡ 5 minutos |
 | **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** | Você tem Ubuntu Server zerado e precisa instalar tudo do zero | 🐧 30-60 minutos |
+| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Você está deployando no Microsoft Azure | 🌩️ 10 minutos |
+| **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | Precisa configurar SSL/TLS (obrigatório para Azure Entra SSO) | 🔒 15-30 minutos |
+| **[AZURE_SSO_RESUMO.md](AZURE_SSO_RESUMO.md)** | Quer habilitar SSO com Azure Entra ID (resumo executivo) | 🔐 5 minutos leitura |
 | **[CHECKLIST.md](CHECKLIST.md)** | Verificar se todos os passos foram executados corretamente | ✅ 5 minutos |
 
 ---
@@ -29,6 +32,7 @@ Guia completo de toda a documentação disponível neste projeto.
 | Documento | Foco | Público |
 |-----------|------|---------|
 | **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** | Guia completo do Apache Hop: projetos, pipelines, workflows | 🔄 Engenheiros de Dados |
+| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Configuração de Network Security Group e Azure-específico | 🌩️ DevOps Azure || **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | Guia rápido de configuração SSL/TLS (Let's Encrypt, auto-assinado, Nginx) | 🔒 DevOps / SysAdmin || **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** | Configurar Single Sign-On com Azure Entra ID (OAuth2) | 🔐 Administradores / DevOps |
 | **[docker-compose.yml](docker-compose.yml)** | Definição da infraestrutura (comentado) | 🐋 DevOps e SREs |
 | **[.env.example](.env.example)** | Template de variáveis de ambiente com documentação | ⚙️ Administradores |
 
@@ -51,9 +55,18 @@ Guia completo de toda a documentação disponível neste projeto.
 
 ```
 1. UBUNTU_SETUP.md      → Instalar tudo do zero
-2. CHECKLIST.md         → Verificar instalação
-3. README.md            → Entender o ambiente
-4. hop/HOP_GUIDE.md     → Criar pipelines ETL
+2. AZURE_SETUP.md       → (Se Azure) Configurar NSG
+3. CHECKLIST.md         → Verificar instalação
+4. README.md            → Entender o ambiente
+5. hop/HOP_GUIDE.md     → Criar pipelines ETL
+```
+
+### 🌩️ Azure Cloud Deployment
+
+```
+1. UBUNTU_SETUP.md      → Setup básico do Ubuntu
+2. AZURE_SETUP.md       → Configurar NSG e portas
+3. TROUBLESHOOTING.md   → Se houver problemas de rede
 ```
 
 ### ⚡ Já Tem Docker? (Setup Rápido)

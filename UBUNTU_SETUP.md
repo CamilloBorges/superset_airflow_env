@@ -2,6 +2,8 @@
 
 Este guia assume que você tem um **Ubuntu Server** recém-instalado e vai configurar todo o ambiente do zero.
 
+> **🌩️ Usando Azure?** Consulte também o [AZURE_SETUP.md](AZURE_SETUP.md) para configurar o Network Security Group (NSG) e liberar portas.
+
 ## 📋 Pré-requisitos
 
 - Ubuntu Server 20.04 LTS ou superior
@@ -103,8 +105,8 @@ pip3 install cryptography
 
 ```bash
 # Configurar usuário Git
-git config --global user.name "Seu Nome"
-git config --global user.email "seu-email@exemplo.com"
+git config --global user.name "Camillo Borges"
+git config --global user.email "camillo.cborges@bomgado.com"
 
 # Verificar configuração
 git config --list
@@ -312,7 +314,7 @@ sudo ufw allow 8081/tcp  # Hop
 sudo ufw status
 ```
 
-Acesse via: `http://IP-DO-SERVIDOR:8080`, etc.
+Acesse via: `http://172.174.210.23:8080`, etc.
 
 ---
 
