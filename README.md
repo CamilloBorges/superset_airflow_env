@@ -4,17 +4,38 @@ Ambiente completo de Business Intelligence e Engenharia de Dados baseado em cont
 
 > 🚀 **Início Rápido?** Consulte [QUICKSTART.md](QUICKSTART.md) para setup em 5 minutos  
 > 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para guia completo  
-> 🌩️ **Usando Azure?** Consulte [AZURE_SETUP.md](AZURE_SETUP.md) para configurar NSG e portas  > 🔒 **Precisa de HTTPS?** Consulte [HTTPS_SETUP.md](HTTPS_SETUP.md) para configurar SSL/TLS  > 🔐 **Quer SSO com Azure Entra ID?** Consulte [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md) para configurar autenticação única
+> 🌩️ **Usando Azure?** Consulte [AZURE_SETUP.md](AZURE_SETUP.md) para configurar NSG e portas  
+> 🔒 **Configurar HTTPS?** Consulte [HTTPS_SETUP.md](HTTPS_SETUP.md) - Nginx já está configurado!  
+> 🔐 **Quer SSO com Azure Entra ID?** Consulte [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md) para configuração
 
 ## 🏗️ Arquitetura da Stack
 
 Esta plataforma integra as seguintes ferramentas open-source:
 
+- **Nginx** (Alpine) - Reverse proxy com HTTPS/SSL (porta 443, 8443, 8444)
 - **Apache Airflow** (v2.8.0) - Orquestrador de workflows com CeleryExecutor
 - **Apache Superset** (v3.0.0) - Plataforma de visualização e BI
 - **Apache Hop** (v2.7.0) - Motor de ETL/ELT
 - **PostgreSQL** (v15) - Banco de dados de metadados
 - **Redis** (v7) - Message broker para Celery
+
+### Fluxo de Acesso
+
+```
+Internet (HTTPS)
+    ↓
+Nginx Reverse Proxy (443, 8443, 8444)
+    ↓
+┌──────────────┬──────────────┬──────────────┐
+│  Superset    │   Airflow    │     Hop      │
+│   :8088      │   :8080      │   :8081      │
+└──────────────┴──────────────┴──────────────┘
+         ↓              ↓
+    ┌────────┐     ┌─────┐
+    │ PostgreSQL │   │ Redis │
+    │   :5432   │   │ :6379 │
+    └────────┘     └─────┘
+```
 
 ## 📁 Estrutura do Repositório
 
@@ -22,8 +43,15 @@ Esta plataforma integra as seguintes ferramentas open-source:
 superset_airflow_env/
 ├── .env.example                    # Template de variáveis de ambiente
 ├── .gitignore                      # Arquivos ignorados pelo Git
-├── docker-compose.yml              # Definição completa da infraestrutura
+├── docker-compose.yml              # Definição completa da infraestrutura (13 serviços)
 ├── README.md                       # Esta documentação
+│
+├── nginx/                          # Nginx Reverse Proxy
+│   └── nginx.conf                  # Configuração HTTPS
+│
+├── certs/                          # Certificados SSL (gerados automaticamente)
+│   ├── cert.pem                    # Certificado SSL
+│   └── key.pem                     # Chave privada
 │
 ├── airflow/                        # Apache Airflow
 │   ├── dags/                       # DAGs (pipelines do Airflow)
@@ -55,6 +83,7 @@ superset_airflow_env/
 - **Docker Compose** (versão 2.0 ou superior)
 - Pelo menos **8GB de RAM** disponível para os containers
 - **10GB de espaço em disco** livre
+- **OpenSSL** (para geração de certificados SSL)
 
 > 📘 **Instalando em Ubuntu Server do Zero?**  
 > Consulte o guia completo: [UBUNTU_SETUP.md](UBUNTU_SETUP.md) - inclui instalação do Docker, configuração de permissões e setup completo passo a passo.
@@ -74,16 +103,19 @@ Copie o arquivo de exemplo e edite com suas configurações:
 cp .env.example .env
 ```
 
-⚠️ **IMPORTANTE**: Edite o arquivo `.env` e altere os seguintes valores:
+⚠️ **IMPORTANTE**: Edite o arquivo `.env` e configure:
 
-1. **Senhas e Secrets** (OBRIGATÓRIO):
+1. **Domínio/IP Público** (OBRIGATÓRIO para HTTPS):
+   - `PUBLIC_DOMAIN` - Seu domínio ou IP público (ex: `172.174.210.23` ou `dados.suaempresa.com`)
+
+2. **Senhas e Secrets** (OBRIGATÓRIO):
    - `POSTGRES_PASSWORD` - Senha do PostgreSQL
    - `REDIS_PASSWORD` - Senha do Redis
    - `AIRFLOW__CORE__FERNET_KEY` - Chave Fernet do Airflow
    - `AIRFLOW__WEBSERVER__SECRET_KEY` - Secret key do webserver
    - `SUPERSET_SECRET_KEY` - Secret key do Superset (mínimo 42 caracteres)
 
-2. **Gerar Fernet Key para o Airflow**:
+3. **Gerar Fernet Key para o Airflow**:
 
 ```bash
 # Python
@@ -93,10 +125,29 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 Ou use Docker:
 
 ```bash
-docker run --rm python:3.11-slim python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+docker run --rm python:3.11-slim sh -c "pip install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
 ```
 
-3. **Ajustar AIRFLOW_UID** (Linux/Mac):
+### Passo 3: Gerar Certificados SSL
+
+**Nginx requer HTTPS.** Escolha uma opção:
+
+**Opção A: Certificado Auto-assinado (Desenvolvimento/Teste)**
+
+```bash
+./generate-ssl-cert.sh
+```
+
+**Opção B: Let's Encrypt (Produção com Domínio)**
+
+```bash
+# Configure PUBLIC_DOMAIN no .env primeiro
+./generate-letsencrypt-cert.sh
+```
+
+> 📘 **Detalhes sobre HTTPS:** [HTTPS_SETUP.md](HTTPS_SETUP.md)
+
+### Passo 4: Ajustar AIRFLOW_UID (Linux/Mac)
 
 ```bash
 echo "AIRFLOW_UID=$(id -u)" >> .env
@@ -181,18 +232,29 @@ Após a inicialização completa, acesse:
 
 | Serviço | URL | Usuário Padrão | Senha Padrão |
 |---------|-----|----------------|--------------|
-| **Apache Airflow** | http://localhost:8080 | admin | admin123 |
-| **Apache Superset** | http://localhost:8088 | admin | admin123 |
-| **Apache Hop** | http://localhost:8081 | cluster | cluster |
+| **Apache Superset** | https://SEU_DOMINIO:443 | admin | admin123 |
+| **Apache Airflow** | https://SEU_DOMINIO:8443 | admin | admin123 |
+| **Apache Hop** | https://SEU_DOMINIO:8444 | cluster | cluster |
 
-⚠️ **IMPORTANTE**: Altere as senhas padrão após o primeiro login!
+> 💡 Substitua `SEU_DOMINIO` pelo valor de `PUBLIC_DOMAIN` configurado no .env  
+> 📝 **Exemplos:**  
+> - Com IP: `https://172.174.210.23`, `https://172.174.210.23:8443`  
+> - Com domínio: `https://dados.suaempresa.com`, `https://dados.suaempresa.com:8443`
+
+⚠️ **IMPORTANTE**: 
+- Certificados auto-assinados causarão aviso de segurança (clique "Avançado" → "Prosseguir")
+- Altere as senhas padrão após o primeiro login!
 
 ---
 
 ## 📋 Recursos Adicionais
 
+- **[QUICKSTART.md](QUICKSTART.md)** - Início rápido em 5 minutos
 - **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo de instalação e verificação
 - **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Guia completo para Ubuntu Server do zero
+- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração de NSG e rede no Azure
+- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS (Nginx)
+- **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - Configurar SSO com Azure Entra ID
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solução de problemas comuns
 - **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Estrutura detalhada do projeto
 - **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** - Guia de uso do Apache Hop

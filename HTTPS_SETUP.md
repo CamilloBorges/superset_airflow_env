@@ -1,279 +1,353 @@
-# 🔒 Guia Rápido - Configurar HTTPS para Azure Entra SSO
+# 🔒 Guia de Configuração HTTPS
 
-**Azure Entra ID EXIGE HTTPS para redirect URIs.** Este guia mostra 3 opções para configurar SSL/TLS.
+**Azure Entra ID EXIGE HTTPS para redirect URIs.** Este guia mostra como configurar SSL/TLS.
 
----
-
-## 🎯 Escolha Sua Opção
-
-| Opção | Quando Usar | Dificuldade | Custo |
-|-------|-------------|-------------|-------|
-| **1. Certificado Auto-assinado** | Desenvolvimento/Teste | ⭐ Fácil | Gratuito |
-| **2. Let's Encrypt** | Produção com domínio | ⭐⭐ Médio | Gratuito |
-| **3. Nginx Reverse Proxy** | Produção profissional | ⭐⭐⭐ Avançado | Gratuito |
+> 💡 **Nginx já está configurado por padrão** neste projeto como reverse proxy HTTPS.
 
 ---
 
-## 📝 Opção 1: Certificado Auto-assinado (Mais Rápido)
+## 🎯 Configuração Rápida (2 minutos)
 
-**Tempo:** 5 minutos  
-**Ideal para:** Desenvolvimento e testes internos
+A plataforma já vem com **Nginx reverse proxy** configurado. Você só precisa gerar os certificados SSL:
 
-### Passo 1: Gerar Certificado
-
-```bash
-# No servidor Azure
-cd ~/superset_airflow_env
-
-# Criar diretório para certificados
-mkdir -p certs
-
-# Gerar certificado auto-assinado (válido 365 dias)
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout certs/selfsigned.key \
-  -out certs/selfsigned.crt \
-  -subj "/C=BR/ST=SP/L=SaoPaulo/O=DataPlatform/CN=172.174.210.23"
-
-# Ajustar permissões
-chmod 644 certs/selfsigned.crt
-chmod 600 certs/selfsigned.key
-```
-
-### Passo 2: Atualizar docker-compose.yml
-
-Adicione ao serviço `superset`:
-
-```yaml
-superset:
-  image: apache/superset:3.0.0
-  container_name: superset
-  ports:
-    - "8088:8088"
-    - "8443:8443"  # Porta HTTPS
-  environment:
-    - SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config_azure.py
-    - SUPERSET_WEBSERVER_PROTOCOL=https
-    - SUPERSET_WEBSERVER_SSL_CERT_PATH=/app/certs/selfsigned.crt
-    - SUPERSET_WEBSERVER_SSL_KEY_PATH=/app/certs/selfsigned.key
-  volumes:
-    - ./superset/config:/app/pythonpath
-    - ./superset/data:/app/superset_home
-    - ./certs:/app/certs:ro  # Montar certificados
-```
-
-Adicione ao serviço `airflow-webserver`:
-
-```yaml
-airflow-webserver:
-  <<: *airflow-common
-  command: webserver
-  ports:
-    - "8080:8080"
-    - "8443:8443"  # Porta HTTPS
-  environment:
-    <<: *airflow-common-env
-    AIRFLOW__WEBSERVER__CONFIG_FILE: /opt/airflow/config/webserver_config.py
-    AIRFLOW__WEBSERVER__WEB_SERVER_SSL_CERT: /opt/airflow/certs/selfsigned.crt
-    AIRFLOW__WEBSERVER__WEB_SERVER_SSL_KEY: /opt/airflow/certs/selfsigned.key
-  volumes:
-    - ./airflow/config:/opt/airflow/config
-    - ./certs:/opt/airflow/certs:ro  # Montar certificados
-```
-
-### Passo 3: Reiniciar Containers
+### Opção A: Certificado Auto-assinado (Desenvolvimento)
 
 ```bash
-docker compose down
+# Gerar certificado auto-assinado
+./generate-ssl-cert.sh
+
+# Iniciar plataforma
 docker compose up -d
-
-# Aguardar containers iniciarem
-sleep 30
-
-# Testar HTTPS
-curl -k https://172.174.210.23:8088/health
-curl -k https://172.174.210.23:8080/health
 ```
 
-### Passo 4: Atualizar NSG (Se Necessário)
-
-Se estiver usando porta 8443 em vez de 8088/8080:
+### Opção B: Let's Encrypt (Produção com Domínio)
 
 ```bash
-# Azure CLI
-az network nsg rule create \
-  --resource-group SEU_RESOURCE_GROUP \
-  --nsg-name SEU_NSG \
-  --name Allow-HTTPS-8443 \
-  --protocol tcp \
-  --priority 340 \
-  --destination-port-range 8443 \
-  --access Allow
+# Configurar domínio no .env
+nano .env
+# PUBLIC_DOMAIN=dados.suaempresa.com
+
+# Gerar certificado Let's Encrypt
+./generate-letsencrypt-cert.sh
+
+# Iniciar plataforma
+docker compose up -d
 ```
 
-### Passo 5: Configurar Redirect URIs no Azure
-
-No Azure Portal → App Registrations:
-
-**Superset:**
-```
-https://172.174.210.23:8088/oauth-authorized/azure
-```
-
-**Airflow:**
-```
-https://172.174.210.23:8080/oauth-authorized/azure
-```
-
-### ⚠️ Aviso de Segurança do Navegador
-
-Certificados auto-assinados causarão aviso no navegador:
-- Chrome/Edge: "Sua conexão não é particular"
-- Firefox: "Aviso: risco potencial de segurança"
-
-**Solução temporária:** Clique em "Avançado" → "Prosseguir para o site"
+**Pronto!** Acesse:
+- **Superset:** https://SEU_DOMINIO (porta 443)
+- **Airflow:** https://SEU_DOMINIO:8443
+- **Hop:** https://SEU_DOMINIO:8444
 
 ---
 
-## 🌐 Opção 2: Let's Encrypt (Produção com Domínio)
+## 📋 Como Funciona
 
-**Tempo:** 15 minutos  
-**Ideal para:** Produção com domínio próprio  
-**Requisitos:** Domínio registrado (ex: dados.suaempresa.com)
-
-### Passo 1: Configurar DNS
-
-Aponte seu domínio para o IP público da VM Azure:
+### Arquitetura HTTPS
 
 ```
-A Record: dados.suaempresa.com → 172.174.210.23
+Cliente HTTPS
+    ↓
+Nginx (443, 8443, 8444)
+    ↓
+┌──────────┬──────────┬──────────┐
+│ Superset │ Airflow  │   Hop    │
+│  :8088   │  :8080   │  :8081   │
+└──────────┴──────────┴──────────┘
 ```
 
-### Passo 2: Instalar Certbot
+### Nginx já configurado
+
+O `docker-compose.yml` já inclui:
+
+```yaml
+nginx:
+  image: nginx:alpine
+  container_name: nginx-proxy
+  ports:
+    - "80:80"       # HTTP → Redireciona para HTTPS
+    - "443:443"     # HTTPS Superset
+    - "8443:8443"   # HTTPS Airflow  
+    - "8444:8444"   # HTTPS Hop
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ${SSL_CERT_PATH}:/etc/nginx/certs/cert.pem:ro
+    - ${SSL_KEY_PATH}:/etc/nginx/certs/key.pem:ro
+```
+
+### Variáveis no .env
 
 ```bash
-sudo apt update
-sudo apt install certbot -y
+# Domínio ou IP público
+PUBLIC_DOMAIN=172.174.210.23
+
+# Caminhos dos certificados
+SSL_CERT_PATH=./certs/cert.pem
+SSL_KEY_PATH=./certs/key.pem
 ```
 
-### Passo 3: Parar Containers Temporariamente
+---
+
+## 🔐 Detalhes: Certificado Auto-assinado
+
+**Tempo:** 2 minutos  
+**Ideal para:** Desenvolvimento e testes
+
+### Script Automático
 
 ```bash
-cd ~/superset_airflow_env
-docker compose down
+./generate-ssl-cert.sh
 ```
 
-### Passo 4: Obter Certificado
+O script faz:
+1. Cria diretório `certs/`
+2. Gera certificado válido por 365 dias
+3. Configura permissões adequadas
+4. Já funciona com Nginx
 
-```bash
-# Certbot standalone (usa porta 80)
-sudo certbot certonly --standalone -d dados.suaempresa.com
+### Processo Manual
 
-# Ou para múltiplos domínios
-sudo certbot certonly --standalone \
-  -d superset.suaempresa.com \
-  -d airflow.suaempresa.com
-```
-
-Certificados serão salvos em:
-```
-/etc/letsencrypt/live/dados.suaempresa.com/fullchain.pem
-/etc/letsencrypt/live/dados.suaempresa.com/privkey.pem
-```
-
-### Passo 5: Copiar Certificados
+Se preferir gerar manualmente:
 
 ```bash
 # Criar diretório
-mkdir -p ~/superset_airflow_env/certs
+mkdir -p certs
 
-# Copiar certificados (com permissões adequadas)
-sudo cp /etc/letsencrypt/live/dados.suaempresa.com/fullchain.pem \
-  ~/superset_airflow_env/certs/cert.pem
+# Gerar certificado
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout certs/key.pem \
+  -out certs/cert.pem \
+  -subj "/C=BR/ST=SP/L=SaoPaulo/O=DataPlatform/CN=${PUBLIC_DOMAIN}"
 
-sudo cp /etc/letsencrypt/live/dados.suaempresa.com/privkey.pem \
-  ~/superset_airflow_env/certs/key.pem
-
-# Ajustar propriedade
-sudo chown $USER:$USER ~/superset_airflow_env/certs/*
-chmod 644 ~/superset_airflow_env/certs/cert.pem
-chmod 600 ~/superset_airflow_env/certs/key.pem
+# Ajustar permissões
+chmod 644 certs/cert.pem
+chmod 600 certs/key.pem
 ```
 
-### Passo 6: Atualizar docker-compose.yml
+### ⚠️ Aviso de Segurança
 
-Use `cert.pem` e `key.pem` em vez de `selfsigned.*` (mesmo esquema da Opção 1).
+Navegadores mostrarão aviso "Conexão não é segura":
+- **Chrome/Edge:** Clique "Avançado" → "Prosseguir"
+- **Firefox:** Clique "Avançado" → "Aceitar o risco"
 
-### Passo 7: Renovação Automática
+**Isso é normal para certificados auto-assinados.**
 
-Let's Encrypt expira em 90 dias. Configure renovação automática:
+---
+
+## 🌐 Detalhes: Let's Encrypt
+
+**Tempo:** 5-10 minutos  
+**Ideal para:** Produção com domínio
+**Requisitos:** 
+- Domínio registrado (ex: `dados.suaempresa.com`)
+- DNS apontando para o servidor
+- Porta 80 acessível
+
+### Script Automático
 
 ```bash
-# Adicionar ao crontab
+# Configurar domínio no .env primeiro
+nano .env
+# PUBLIC_DOMAIN=dados.suaempresa.com
+
+# Executar script
+./generate-letsencrypt-cert.sh
+```
+
+O script faz:
+1. Valida domínio
+2. Para Nginx temporariamente
+3. Obtém certificado via Certbot
+4. Copia certificados para `certs/`
+5. Reinicia Nginx
+
+### Processo Manual
+
+### Processo Manual
+
+Se preferir fazer manualmente:
+
+```bash
+# 1. Instalar certbot
+sudo apt update && sudo apt install -y certbot
+
+# 2. Parar Nginx
+docker compose stop nginx
+
+# 3. Obter certificado
+sudo certbot certonly --standalone -d dados.suaempresa.com
+
+# 4. Copiar certificados
+sudo cp /etc/letsencrypt/live/dados.suaempresa.com/fullchain.pem certs/cert.pem
+sudo cp /etc/letsencrypt/live/dados.suaempresa.com/privkey.pem certs/key.pem
+
+# 5. Ajustar permissões
+sudo chown $USER:$USER certs/*
+chmod 644 certs/cert.pem
+chmod 600 certs/key.pem
+
+# 6. Reiniciar Nginx
+docker compose up -d nginx
+```
+
+### Renovação Automática
+
+Let's Encrypt expira em 90 dias. Configure renovação:
+
+```bash
 sudo crontab -e
 
-# Adicione esta linha (renova semanalmente)
-0 3 * * 1 certbot renew --quiet && cp /etc/letsencrypt/live/dados.suaempresa.com/*.pem ~/superset_airflow_env/certs/ && cd ~/superset_airflow_env && docker compose restart superset airflow-webserver
+# Adicione esta linha (renova toda segunda às 3h)
+0 3 * * 1 certbot renew --quiet --deploy-hook 'cp /etc/letsencrypt/live/dados.suaempresa.com/*.pem /home/azureuser/superset_airflow_env/certs/ && docker compose -f /home/azureuser/superset_airflow_env/docker-compose.yml restart nginx'
 ```
 
 ---
 
-## 🚀 Opção 3: Nginx Reverse Proxy (Recomendado para Produção)
+## 🔧 Configuração do Azure Entra SSO
 
-**Tempo:** 30 minutos  
-**Ideal para:** Produção profissional  
-**Benefícios:** Load balancing, cache, segurança adicional
+Após configurar HTTPS, configure os redirect URIs no Azure:
 
-### Passo 1: Criar Configuração Nginx
+### Superset
 
-Crie `nginx/nginx.conf`:
+```
+https://SEU_DOMINIO/oauth-authorized/azure
+```
 
-```nginx
-upstream superset_backend {
-    server superset:8088;
-}
+Exemplo:
+- Com domínio: `https://dados.suaempresa.com/oauth-authorized/azure`
+- Com IP: `https://172.174.210.23/oauth-authorized/azure`
 
-upstream airflow_backend {
-    server airflow-webserver:8080;
-}
+### Airflow
 
-# Redirecionar HTTP para HTTPS
-server {
-    listen 80;
-    server_name 172.174.210.23;
-    return 301 https://$server_name$request_uri;
-}
+```
+https://SEU_DOMINIO:8443/oauth-authorized/azure
+```
 
-# Superset HTTPS
-server {
-    listen 443 ssl http2;
-    server_name 172.174.210.23;
+Exemplo:
+- Com domínio: `https://dados.suaempresa.com:8443/oauth-authorized/azure`
+- Com IP: `https://172.174.210.23:8443/oauth-authorized/azure`
 
-    # Certificados SSL
-    ssl_certificate /etc/nginx/certs/cert.pem;
-    ssl_certificate_key /etc/nginx/certs/key.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+> 💡 Use a variável `PUBLIC_DOMAIN` do .env para manter consistência.
 
-    # Superset
-    location /superset/ {
-        proxy_pass http://superset_backend/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_redirect off;
-    }
+---
 
-    # OAuth callback
-    location /oauth-authorized/azure {
-        proxy_pass http://superset_backend/oauth-authorized/azure;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
+## 🧪 Testar HTTPS
 
-# Airflow HTTPS (porta 8443)
-server {
+### Verificar Certificados
+
+```bash
+# Ver informações do certificado
+openssl x509 -in certs/cert.pem -noout -text
+
+# Ver datas de validade
+openssl x509 -in certs/cert.pem -noout -dates
+
+# Testar HTTPS localmente
+curl -k https://localhost/health
+curl -k https://localhost:8443/health
+```
+
+### Verificar Nginx
+
+```bash
+# Status do Nginx
+docker compose ps nginx
+
+# Logs do Nginx
+docker compose logs nginx
+
+# Testar configuração
+docker compose exec nginx nginx -t
+```
+
+### Acessar pelo Navegador
+
+1. **Superset:** https://SEU_DOMINIO
+2. **Airflow:** https://SEU_DOMINIO:8443
+3. **Hop:** https://SEU_DOMINIO:8444
+
+---
+
+## 🔥 Troubleshooting
+
+### Erro: "Certificados não encontrados"
+
+```bash
+# Verificar se existem
+ls -la certs/
+
+# Gerar novamente
+./generate-ssl-cert.sh
+```
+
+### Erro: "Nginx não inicia"
+
+```bash
+# Ver logs
+docker compose logs nginx
+
+# Verificar configuração
+docker compose exec nginx nginx -t
+
+# Verificar permissões dos certificados
+ls -la certs/
+```
+
+### Aviso: "Certificado inválido"
+
+**Para certificados auto-assinados:**
+- Isso é esperado. Clique em "Avançado" → "Prosseguir"
+
+**Para Let's Encrypt:**
+```bash
+# Verificar validade
+openssl x509 -in certs/cert.pem -noout -dates
+
+# Se expirado, renovar
+./generate-letsencrypt-cert.sh
+```
+
+### Erro: "Porta 443 já em uso"
+
+```bash
+# Ver o que está usando a porta
+sudo lsof -i :443
+sudo lsof -i :80
+
+# Parar Apache (se instalado)
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+```
+
+---
+
+## 📚 Próximos Passos
+
+Após configurar HTTPS:
+
+1. **Configure NSG do Azure** (se necessário):
+   ```bash
+   # Abrir portas HTTPS
+   az network nsg rule create --resource-group RG --nsg-name NSG \
+     --name HTTPS --priority 300 --destination-port-ranges 443 8443
+   ```
+
+2. **Configure Azure Entra SSO:**
+   - Leia: [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)
+   - Execute: `./configure-azure-sso.sh`
+
+3. **Inicie a plataforma:**
+   ```bash
+   docker compose up -d
+   ```
+
+---
+
+## 📖 Referências
+
+- [Documentação Nginx](https://nginx.org/en/docs/)
+- [Let's Encrypt](https://letsencrypt.org/)
+- [Azure Entra ID OAuth](https://docs.microsoft.com/azure/active-directory/develop/)
     listen 8443 ssl http2;
     server_name 172.174.210.23;
 

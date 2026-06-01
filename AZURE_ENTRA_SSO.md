@@ -47,94 +47,56 @@ Usuário → Superset/Airflow → Azure Entra ID → Login Microsoft → Token �
 - [ ] Conta Azure com permissões de **Application Administrator** ou **Cloud Application Administrator**
 - [ ] Acesso ao [Azure Portal](https://portal.azure.com)
 - [ ] Ambiente rodando (Superset e Airflow com containers up)
-- [ ] Domínio público ou IP público configurado
-- [ ] **HTTPS configurado** (OBRIGATÓRIO - veja seção "Configurar HTTPS" abaixo)
+- [ ] **PUBLIC_DOMAIN** configurado no .env (seu IP público ou domínio)
+- [ ] **Certificados SSL gerados** (Nginx já configurado, basta gerar certificados)
 
 ---
 
 ## 🔒 Passo 0: Configurar HTTPS (OBRIGATÓRIO)
 
-**Azure Entra ID exige HTTPS para redirect URIs.** Configure SSL/TLS antes de criar os App Registrations.
+**Azure Entra ID exige HTTPS para redirect URIs.** 
 
-### Opção 1: Certificado Let's Encrypt (Gratuito)
+> 💡 **Nginx já está configurado!** Você só precisa gerar os certificados SSL.
 
-```bash
-# Instalar Certbot
-sudo apt update
-sudo apt install certbot python3-certbot-nginx -y
-
-# Obter certificado (requer domínio)
-sudo certbot certonly --standalone -d seu-dominio.com
-```
-
-Certificados serão salvos em `/etc/letsencrypt/live/seu-dominio.com/`
-
-### Opção 2: Certificado Auto-assinado (Desenvolvimento/Teste)
+### Opção A: Certificado Auto-assinado (Rápido - 2 minutos)
 
 ```bash
-# Criar diretório para certificados
-mkdir -p ~/superset_airflow_env/certs
-cd ~/superset_airflow_env/certs
+# Gera certificado automaticamente
+./generate-ssl-cert.sh
 
-# Gerar certificado auto-assinado (válido 365 dias)
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout selfsigned.key \
-  -out selfsigned.crt \
-  -subj "/C=BR/ST=SP/L=SaoPaulo/O=DataPlatform/CN=172.174.210.23"
-
-# Ajustar permissões
-sudo chmod 644 selfsigned.crt
-sudo chmod 600 selfsigned.key
+# Reinicia Nginx
+docker compose restart nginx
 ```
 
-### Opção 3: Reverse Proxy com Nginx (Recomendado para Produção)
+### Opção B: Let's Encrypt (Produção - 5 minutos)
 
-Crie `nginx/nginx.conf`:
+```bash
+# Configure PUBLIC_DOMAIN no .env primeiro
+nano .env
+# PUBLIC_DOMAIN=dados.suaempresa.com
 
-```nginx
-upstream superset {
-    server localhost:8088;
-}
-
-upstream airflow {
-    server localhost:8080;
-}
-
-server {
-    listen 443 ssl;
-    server_name 172.174.210.23;  # ou seu-dominio.com
-
-    ssl_certificate /etc/nginx/certs/selfsigned.crt;
-    ssl_certificate_key /etc/nginx/certs/selfsigned.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    # Superset
-    location /superset {
-        proxy_pass http://superset;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name airflow.seu-dominio.com;
-
-    ssl_certificate /etc/nginx/certs/selfsigned.crt;
-    ssl_certificate_key /etc/nginx/certs/selfsigned.key;
-
-    # Airflow
-    location / {
-        proxy_pass http://airflow;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
+# Gera certificado Let's Encrypt
+./generate-letsencrypt-cert.sh
 ```
+
+> 📖 **Guia completo de HTTPS:** [HTTPS_SETUP.md](HTTPS_SETUP.md)
+
+### Verificar HTTPS Funcionando
+
+```bash
+# Testar Superset
+curl -k https://SEU_DOMINIO/health
+
+# Testar Airflow
+curl -k https://SEU_DOMINIO:8443/health
+
+# Ver logs do Nginx
+docker compose logs nginx
+```
+
+**✅ HTTPS configurado?** Prossiga para criar os App Registrations.
+
+---
 
 Adicione ao `docker-compose.yml`:
 

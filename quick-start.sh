@@ -83,6 +83,57 @@ fi
 
 echo ""
 
+# =============================================================================
+# Gerar Certificados SSL (HTTPS)
+# =============================================================================
+echo -e "${YELLOW}Verificando certificados SSL...${NC}"
+if [ ! -f "certs/cert.pem" ] || [ ! -f "certs/key.pem" ]; then
+    echo -e "${YELLOW}⚠ Certificados SSL não encontrados!${NC}"
+    echo ""
+    echo -e "${CYAN}Nginx requer HTTPS (Azure Entra SSO exige).${NC}"
+    echo ""
+    echo -e "Escolha uma opção:"
+    echo -e "  ${GREEN}1${NC} - Gerar certificado auto-assinado (desenvolvimento/teste)"
+    echo -e "  ${GREEN}2${NC} - Usar Let's Encrypt (produção, requer domínio válido)"
+    echo -e "  ${GREEN}3${NC} - Pular (configurar manualmente depois)"
+    echo ""
+    read -p "Opção (1/2/3): " SSL_OPTION
+    
+    case $SSL_OPTION in
+        1)
+            echo ""
+            echo -e "${YELLOW}Gerando certificado auto-assinado...${NC}"
+            chmod +x generate-ssl-cert.sh 2>/dev/null || true
+            ./generate-ssl-cert.sh
+            ;;
+        2)
+            echo ""
+            echo -e "${YELLOW}Obtendo certificado Let's Encrypt...${NC}"
+            chmod +x generate-letsencrypt-cert.sh 2>/dev/null || true
+            ./generate-letsencrypt-cert.sh
+            ;;
+        3)
+            echo ""
+            echo -e "${YELLOW}⚠ Pulando geração de certificados.${NC}"
+            echo -e "${RED}ATENÇÃO: Nginx NÃO INICIARÁ sem certificados SSL!${NC}"
+            echo ""
+            echo -e "Execute depois:"
+            echo -e "  ${CYAN}./generate-ssl-cert.sh${NC}          (auto-assinado)"
+            echo -e "  ${CYAN}./generate-letsencrypt-cert.sh${NC}  (Let's Encrypt)"
+            echo ""
+            ;;
+        *)
+            echo -e "${YELLOW}Opção inválida. Gerando certificado auto-assinado...${NC}"
+            chmod +x generate-ssl-cert.sh 2>/dev/null || true
+            ./generate-ssl-cert.sh
+            ;;
+    esac
+else
+    echo -e "${GREEN}✓ Certificados SSL encontrados!${NC}"
+fi
+
+echo ""
+
 # Verificar se as chaves foram alteradas do padrão
 echo -e "${YELLOW}Verificando configurações de segurança...${NC}"
 if grep -q "changeme" .env; then

@@ -2,6 +2,8 @@
 
 Guia super rápido para quem tem pressa e já conhece Docker.
 
+> 🔒 **ATENÇÃO:** Esta plataforma usa **HTTPS por padrão** via Nginx reverse proxy.
+
 ---
 
 ## 🎯 Cenário 1: Ubuntu Server do Zero
@@ -27,47 +29,70 @@ cd superset_airflow_env
 # Copiar template
 cp .env.example .env
 
-# Gerar chaves (escolha uma opção):
+# Edite o .env e configure:
+nano .env
+```
 
+**Configure no .env:**
+- `PUBLIC_DOMAIN` - Seu IP público ou domínio (ex: `172.174.210.23` ou `dados.empresa.com`)
+- Senhas: `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
+- Chaves de segurança (veja passo 3)
+
+### 3. Gerar chaves de segurança
+
+```bash
 # Opção A: Com Python local
 pip3 install cryptography
 python3 generate_secrets.py
 
 # Opção B: Com Docker (sem instalar nada)
 docker run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-
-# Edite .env com as chaves geradas
-nano .env  # ou vim .env
 ```
 
-### 3. Ajuste permissões (Linux/Mac)
+Cole as chaves geradas no `.env`.
+
+### 4. Gerar certificados SSL
 
 ```bash
-chmod +x quick-start.sh postgres/init-scripts/*.sh
+# Opção A: Certificado auto-assinado (desenvolvimento/teste)
+./generate-ssl-cert.sh
+
+# Opção B: Let's Encrypt (produção com domínio)
+./generate-letsencrypt-cert.sh
+```
+
+> 💡 Para mais detalhes: [HTTPS_SETUP.md](HTTPS_SETUP.md)
+
+### 5. Ajuste permissões (Linux/Mac)
+
+```bash
+chmod +x quick-start.sh generate-ssl-cert.sh generate-letsencrypt-cert.sh
+chmod +x postgres/init-scripts/*.sh
 sudo chown -R 50000:0 airflow/
 chmod -R 777 airflow/logs
 ```
 
 **Windows**: Pule esta etapa.
 
-### 4. Inicialize
+### 6. Inicialize
 
 ```bash
-# Linux/Mac
+# Linux/Mac (script automático com SSL)
 ./quick-start.sh
-
-# Windows
-.\quick-start.ps1
 
 # Ou manualmente
 docker compose up -d
 ```
 
-### 5. Aguarde 2-5 minutos e acesse
+### 7. Aguarde 2-5 minutos e acesse
 
-- **Airflow**: http://localhost:8080 (admin/admin123)
-- **Superset**: http://localhost:8088 (admin/admin123)
-- **Hop**: http://localhost:8081 (cluster/cluster)
+- **Superset**: https://SEU_DOMINIO:443 (admin/admin123)
+- **Airflow**: https://SEU_DOMINIO:8443 (admin/admin123)
+- **Hop**: https://SEU_DOMINIO:8444 (cluster/cluster)
+
+> 💡 Substitua `SEU_DOMINIO` pelo valor de `PUBLIC_DOMAIN` do .env
+
+⚠️ **Certificados auto-assinados:** Navegador mostrará aviso. Clique "Avançado" → "Prosseguir".
 
 ---
 
@@ -78,12 +103,35 @@ docker compose up -d
 docker compose ps
 
 # Logs
-docker compose logs -f
+docker compose logs -f nginx superset airflow-webserver
 
-# Tudo ok? Use o checklist:
+# Testar HTTPS
+curl -k https://localhost/health
+curl -k https://localhost:8443/health
 ```
 
 👉 **[CHECKLIST.md](CHECKLIST.md)** - Verificação completa
+
+---
+
+## 🌩️ Usando Azure?
+
+**Configure NSG** para permitir tráfego HTTPS:
+
+```bash
+# Abrir portas
+az network nsg rule create --resource-group RG --nsg-name NSG \
+  --name HTTPS --priority 300 \
+  --destination-port-ranges 443 8443 8444 --access Allow
+```
+
+👉 **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração completa Azure
+
+---
+
+## 🔐 Quer SSO com Azure Entra ID?
+
+👉 **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - Configuração de SSO
 
 ---
 
@@ -97,6 +145,9 @@ docker compose logs -f
 
 - **[README.md](README.md)** - Documentação detalhada
 - **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Setup Ubuntu do zero
+- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS
+- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Setup Azure
+- **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - SSO com Azure Entra
 - **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo
 - **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** - Guia do Hop
 
