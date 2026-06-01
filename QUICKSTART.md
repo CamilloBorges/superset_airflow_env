@@ -2,7 +2,7 @@
 
 Guia super rápido para quem tem pressa e já conhece Docker.
 
-> 🔒 **ATENÇÃO:** Esta plataforma usa **HTTPS por padrão** via Nginx reverse proxy.
+> ☁️ **RECOMENDADO:** Use Cloudflare Tunnel para acesso seguro sem expor portas
 
 ---
 
@@ -10,64 +10,81 @@ Guia super rápido para quem tem pressa e já conhece Docker.
 
 **Tem Ubuntu Server recém-instalado?**
 
-👉 **Consulte: [UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Guia completo passo a passo
+👉 **Consulte: [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Guia completo passo a passo (60 min)
 
 ---
 
-## 🎯 Cenário 2: Docker já Instalado
+## 🎯 Cenário 2: Docker já Instalado + Cloudflare Tunnel
 
-### 1. Clone o repositório
+### 1. Configure Cloudflare Tunnel
+
+**No Cloudflare Dashboard:**
+1. Acesse https://dash.cloudflare.com
+2. Zero Trust → Tunnels → Create a tunnel
+3. Nome: `bi-bomgado-data-platform`
+4. Copie o token
+
+**No Servidor:**
+```bash
+# Instalar cloudflared
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Configurar tunnel (cole seu token)
+sudo cloudflared service install <SEU_TOKEN>
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+```
+
+**Configure Public Hostnames no Cloudflare:**
+- `bi.bomgado.com.br` → HTTP → `localhost:80`
+- `airflow.bomgado.com.br` → HTTP → `localhost:8080`
+- `hop.bomgado.com.br` → HTTP → `localhost:8081`
+
+### 2. Clone o repositório
 
 ```bash
 git clone <url-repositorio>
 cd superset_airflow_env
 ```
 
-### 2. Configure ambiente
+### 3. Configure ambiente
 
 ```bash
 # Copiar template
 cp .env.example .env
 
-# Edite o .env e configure:
+# Edite o .env
 nano .env
 ```
 
 **Configure no .env:**
-- `PUBLIC_DOMAIN` - Seu IP público ou domínio (ex: `172.174.210.23` ou `dados.empresa.com`)
-- Senhas: `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
-- Chaves de segurança (veja passo 3)
+```bash
+PUBLIC_DOMAIN=bi.bomgado.com.br
+POSTGRES_PASSWORD=SuaSenhaSegura123!
+REDIS_PASSWORD=OutraSenhaSegura123!
+```
 
-### 3. Gerar chaves de segurança
+### 4. Gerar chaves de segurança
 
 ```bash
-# Opção A: Com Python local
-pip3 install cryptography
-python3 generate_secrets.py
-
-# Opção B: Com Docker (sem instalar nada)
+# Fernet Key para Airflow
 docker run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+
+# Secret Key genérica (42+ caracteres)
+openssl rand -base64 42
 ```
 
-Cole as chaves geradas no `.env`.
-
-### 4. Gerar certificados SSL
-
-```bash
-# Opção A: Certificado auto-assinado (desenvolvimento/teste)
-./generate-ssl-cert.sh
-
-# Opção B: Let's Encrypt (produção com domínio)
-./generate-letsencrypt-cert.sh
-```
-
-> 💡 Para mais detalhes: [HTTPS_SETUP.md](HTTPS_SETUP.md)
+Cole as chaves geradas no `.env`:
+- `AIRFLOW__CORE__FERNET_KEY=<chave_fernet>`
+- `SUPERSET_SECRET_KEY=<secret_key>`
+- `AIRFLOW__WEBSERVER__SECRET_KEY=<secret_key>`
 
 ### 5. Ajuste permissões (Linux/Mac)
 
 ```bash
-chmod +x quick-start.sh generate-ssl-cert.sh generate-letsencrypt-cert.sh
-chmod +x postgres/init-scripts/*.sh
+chmod +x *.sh postgres/init-scripts/*.sh
+mkdir -p airflow/logs
 sudo chown -R 50000:0 airflow/
 chmod -R 777 airflow/logs
 ```
@@ -77,78 +94,110 @@ chmod -R 777 airflow/logs
 ### 6. Inicialize
 
 ```bash
-# Linux/Mac (script automático com SSL)
-./quick-start.sh
+# Iniciar plataforma
+docker compose up -d
 
-# Ou manualmente
+# Aguardar 2-3 minutos
+docker compose logs -f
+```
+
+### 7. Acesse
+
+- **Superset:** https://bi.bomgado.com.br (admin/admin123)
+- **Airflow:** https://airflow.bomgado.com.br (admin/admin123)
+- **Hop:** https://hop.bomgado.com.br (cluster/cluster)
+
+**✅ HTTPS automático via Cloudflare!**
+
+---
+
+## 🎯 Cenário 3: Sem Cloudflare (Acesso Local)
+
+Se não quiser usar Cloudflare Tunnel:
+
+```bash
+# 1. Clone
+git clone <url-repositorio>
+cd superset_airflow_env
+
+# 2. Configure .env
+cp .env.example .env
+nano .env  # Configure senhas e chaves
+
+# 3. Inicie
 docker compose up -d
 ```
 
-### 7. Aguarde 2-5 minutos e acesse
+**Acesse localmente:**
+- Superset: http://localhost:80
+- Airflow: http://localhost:8080
+- Hop: http://localhost:8081
 
-- **Superset**: https://SEU_DOMINIO:443 (admin/admin123)
-- **Airflow**: https://SEU_DOMINIO:8443 (admin/admin123)
-- **Hop**: https://SEU_DOMINIO:8444 (cluster/cluster)
-
-> 💡 Substitua `SEU_DOMINIO` pelo valor de `PUBLIC_DOMAIN` do .env
-
-⚠️ **Certificados auto-assinados:** Navegador mostrará aviso. Clique "Avançado" → "Prosseguir".
+> ⚠️ **Sem Cloudflare:** Você precisa expor portas no firewall/NSG e configurar SSL manualmente  
+> 📖 Veja: [HTTPS_SETUP.md](HTTPS_SETUP.md) e [AZURE_SETUP.md](AZURE_SETUP.md)
 
 ---
 
 ## ✅ Verificação Rápida
 
 ```bash
-# Status
+# Status dos containers
 docker compose ps
 
-# Logs
+# Status do Cloudflare Tunnel (se configurado)
+sudo systemctl status cloudflared
+
+# Logs em tempo real
 docker compose logs -f nginx superset airflow-webserver
 
-# Testar HTTPS
-curl -k https://localhost/health
-curl -k https://localhost:8443/health
+# Testar localmente
+curl http://localhost
 ```
 
 👉 **[CHECKLIST.md](CHECKLIST.md)** - Verificação completa
 
 ---
 
-## 🌩️ Usando Azure?
+## 📚 Documentação Completa
 
-**Configure NSG** para permitir tráfego HTTPS:
-
-```bash
-# Abrir portas
-az network nsg rule create --resource-group RG --nsg-name NSG \
-  --name HTTPS --priority 300 \
-  --destination-port-ranges 443 8443 8444 --access Allow
-```
-
-👉 **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração completa Azure
-
----
-
-## 🔐 Quer SSO com Azure Entra ID?
-
-👉 **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - Configuração de SSO
+- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Guia completo de instalação do zero
+- **[README.md](README.md)** - Documentação detalhada
+- **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** - Detalhes do Cloudflare Tunnel
+- **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Setup Ubuntu do zero
+- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS (sem Cloudflare)
+- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Setup Azure VM
+- **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - SSO com Azure Entra
+- **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo
 
 ---
 
 ## 🆘 Problemas?
 
+**Containers não iniciam:**
+```bash
+docker compose logs <nome_container>
+docker compose restart <nome_container>
+```
+
+**Cloudflare Tunnel offline:**
+```bash
+sudo systemctl restart cloudflared
+sudo journalctl -u cloudflared -n 50
+```
+
+**502 Bad Gateway:**
+```bash
+# Verificar containers
+docker compose ps
+
+# Verificar Nginx
+docker compose logs nginx
+
+# Testar localmente
+curl http://localhost
+```
+
 👉 **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Soluções para problemas comuns
-
----
-
-## 📚 Documentação Completa
-
-- **[README.md](README.md)** - Documentação detalhada
-- **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Setup Ubuntu do zero
-- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS
-- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Setup Azure
-- **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - SSO com Azure Entra
-- **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo
 - **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** - Guia do Hop
 
 ---

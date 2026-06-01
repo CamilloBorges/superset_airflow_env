@@ -8,11 +8,13 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Documento | Quando Usar | Tempo Estimado |
 |-----------|-------------|----------------|
+| **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** | ⭐ **Instalação completa do zero** (Ubuntu limpo → SSO) | 🕐 60-80 minutos |
 | **[QUICKSTART.md](QUICKSTART.md)** | Você já tem Docker instalado e quer começar rapidamente | ⚡ 5 minutos |
-| **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** | Você tem Ubuntu Server zerado e precisa instalar tudo do zero | 🐧 30-60 minutos |
-| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Você está deployando no Microsoft Azure | 🌩️ 10 minutos |
-| **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | Precisa configurar SSL/TLS (obrigatório para Azure Entra SSO) | 🔒 15-30 minutos |
-| **[AZURE_SSO_RESUMO.md](AZURE_SSO_RESUMO.md)** | Quer habilitar SSO com Azure Entra ID (resumo executivo) | 🔐 5 minutos leitura |
+| **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** | Configurar acesso seguro via Cloudflare (recomendado) | ☁️ 15 minutos |
+| **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** | Ubuntu Server zerado (sem Cloudflare Tunnel) | 🐧 30-60 minutos |
+| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Azure VM (somente se NÃO usar Cloudflare Tunnel) | 🌩️ 10 minutos |
+| **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | SSL/TLS manual (somente se NÃO usar Cloudflare Tunnel) | 🔒 15-30 minutos |
+| **[AZURE_SSO_RESUMO.md](AZURE_SSO_RESUMO.md)** | Resumo executivo do SSO com Azure Entra ID | 🔐 5 minutos leitura |
 | **[CHECKLIST.md](CHECKLIST.md)** | Verificar se todos os passos foram executados corretamente | ✅ 5 minutos |
 
 ---
@@ -31,8 +33,11 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Documento | Foco | Público |
 |-----------|------|---------|
+| **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** | Configurar Cloudflare Tunnel (acesso seguro sem expor portas) | ☁️ Recomendado para produção |
 | **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** | Guia completo do Apache Hop: projetos, pipelines, workflows | 🔄 Engenheiros de Dados |
-| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Configuração de Network Security Group e Azure-específico | 🌩️ DevOps Azure || **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | Guia rápido de configuração SSL/TLS (Let's Encrypt, auto-assinado, Nginx) | 🔒 DevOps / SysAdmin || **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** | Configurar Single Sign-On com Azure Entra ID (OAuth2) | 🔐 Administradores / DevOps |
+| **[AZURE_SETUP.md](AZURE_SETUP.md)** | Configuração de NSG no Azure (somente sem Cloudflare Tunnel) | 🌩️ DevOps Azure |
+| **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | SSL/TLS manual: Let's Encrypt, auto-assinado (sem Cloudflare) | 🔒 DevOps / SysAdmin |
+| **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** | Configurar Single Sign-On com Azure Entra ID (OAuth2) | 🔐 Administradores / DevOps |
 | **[docker-compose.yml](docker-compose.yml)** | Definição da infraestrutura (comentado) | 🐋 DevOps e SREs |
 | **[.env.example](.env.example)** | Template de variáveis de ambiente com documentação | ⚙️ Administradores |
 
@@ -42,6 +47,7 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Script | Plataforma | Descrição |
 |--------|-----------|-----------|
+| **[configure-cloudflare.sh](configure-cloudflare.sh)** | Linux | Instalação automatizada do Cloudflare Tunnel |
 | **[quick-start.sh](quick-start.sh)** | Linux/Mac | Script automatizado de inicialização |
 | **[quick-start.ps1](quick-start.ps1)** | Windows | Script automatizado de inicialização |
 | **[generate_secrets.py](generate_secrets.py)** | Todos | Gerador de chaves de segurança |
@@ -51,30 +57,45 @@ Guia completo de toda a documentação disponível neste projeto.
 
 ## 📊 Fluxo de Leitura Recomendado
 
-### 🆕 Primeira Vez? (Servidor Zerado)
+### 🆕 Primeira Vez? (Servidor Zerado) - **RECOMENDADO**
 
 ```
-1. UBUNTU_SETUP.md      → Instalar tudo do zero
-2. AZURE_SETUP.md       → (Se Azure) Configurar NSG
-3. CHECKLIST.md         → Verificar instalação
-4. README.md            → Entender o ambiente
-5. hop/HOP_GUIDE.md     → Criar pipelines ETL
+1. INSTALLATION_GUIDE.md        → ⭐ Guia completo unificado (60-80 min)
+   ├── Fase 1: Preparar Ubuntu
+   ├── Fase 2: Instalar Docker
+   ├── Fase 3: Configurar Cloudflare Tunnel
+   ├── Fase 4: Deploy da Plataforma
+   └── Fase 5: Configurar Azure Entra SSO (opcional)
+
+2. CHECKLIST.md                 → Verificar instalação
+3. hop/HOP_GUIDE.md             → Criar pipelines ETL
 ```
 
-### 🌩️ Azure Cloud Deployment
+### ☁️ Com Cloudflare Tunnel (Produção)
 
 ```
-1. UBUNTU_SETUP.md      → Setup básico do Ubuntu
-2. AZURE_SETUP.md       → Configurar NSG e portas
-3. TROUBLESHOOTING.md   → Se houver problemas de rede
+1. CLOUDFLARE_TUNNEL_SETUP.md   → Configurar tunnel
+2. QUICKSTART.md                → Deploy rápido
+3. AZURE_ENTRA_SSO.md           → (Opcional) SSO
+4. CHECKLIST.md                 → Verificar
+```
+
+### 🌩️ Azure sem Cloudflare (Direto via IP)
+
+```
+1. UBUNTU_SETUP.md              → Setup básico do Ubuntu
+2. AZURE_SETUP.md               → Configurar NSG e portas
+3. HTTPS_SETUP.md               → Configurar SSL/TLS
+4. TROUBLESHOOTING.md           → Se houver problemas
 ```
 
 ### ⚡ Já Tem Docker? (Setup Rápido)
 
 ```
-1. QUICKSTART.md        → Iniciar em 5 minutos
-2. CHECKLIST.md         → Verificar instalação
-3. hop/HOP_GUIDE.md     → Criar pipelines
+1. QUICKSTART.md                → Iniciar em 5 minutos
+2. CLOUDFLARE_TUNNEL_SETUP.md   → (Opcional) Cloudflare
+3. CHECKLIST.md                 → Verificar instalação
+4. hop/HOP_GUIDE.md             → Criar pipelines
 ```
 
 ### 🔧 Manutenção e Operação

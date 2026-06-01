@@ -47,28 +47,36 @@ Usuário → Superset/Airflow → Azure Entra ID → Login Microsoft → Token �
 - [ ] Conta Azure com permissões de **Application Administrator** ou **Cloud Application Administrator**
 - [ ] Acesso ao [Azure Portal](https://portal.azure.com)
 - [ ] Ambiente rodando (Superset e Airflow com containers up)
-- [ ] **PUBLIC_DOMAIN** configurado no .env (seu IP público ou domínio)
-- [ ] **Certificados SSL gerados** (Nginx já configurado, basta gerar certificados)
+- [ ] **Cloudflare Tunnel configurado** (recomendado) OU **HTTPS configurado**
+- [ ] **Domínio público configurado:** `bi.bomgado.com.br`
 
 ---
 
-## 🔒 Passo 0: Configurar HTTPS (OBRIGATÓRIO)
+## 🔒 Passo 0: Verificar HTTPS
 
 **Azure Entra ID exige HTTPS para redirect URIs.** 
 
-> 💡 **Nginx já está configurado!** Você só precisa gerar os certificados SSL.
+### Com Cloudflare Tunnel (Recomendado)
 
-### Opção A: Certificado Auto-assinado (Rápido - 2 minutos)
+✅ **HTTPS já está configurado automaticamente!**
+
+Cloudflare gerencia SSL/TLS. Nenhuma configuração adicional necessária.
+
+> 📖 Guia: [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)
+
+### Sem Cloudflare Tunnel
+
+Se não usar Cloudflare Tunnel, você precisa configurar HTTPS manualmente:
 
 ```bash
-# Gera certificado automaticamente
+# Gera certificado auto-assinado (desenvolvimento)
 ./generate-ssl-cert.sh
 
-# Reinicia Nginx
-docker compose restart nginx
+# OU Let's Encrypt (produção)
+./generate-letsencrypt-cert.sh
 ```
 
-### Opção B: Let's Encrypt (Produção - 5 minutos)
+> 📖 Guia: [HTTPS_SETUP.md](HTTPS_SETUP.md)
 
 ```bash
 # Configure PUBLIC_DOMAIN no .env primeiro
@@ -84,19 +92,13 @@ nano .env
 ### Verificar HTTPS Funcionando
 
 ```bash
-# Testar Superset
-curl -k https://SEU_DOMINIO/health
+# Com Cloudflare Tunnel
+curl https://bi.bomgado.com.br
+curl https://airflow.bomgado.com.br
 
-# Testar Airflow
-curl -k https://SEU_DOMINIO:8443/health
-
-# Ver logs do Nginx
-docker compose logs nginx
-```
-
-**✅ HTTPS configurado?** Prossiga para criar os App Registrations.
-
----
+# Ou localmente
+curl http://localhost
+curl http://localhost:8080
 
 Adicione ao `docker-compose.yml`:
 
@@ -152,7 +154,7 @@ curl -k https://172.174.210.23:8080/health  # Airflow
    Supported account types: Accounts in this organizational directory only
    Redirect URI:
      Platform: Web
-     URI: https://172.174.210.23:8088/oauth-authorized/azure
+     Redirect URI: https://bi.bomgado.com.br/oauth-authorized/azure
    ```
    
    > ⚠️ **IMPORTANTE:** Azure Entra ID **exige HTTPS** para redirect URIs. Configure SSL antes (veja seção abaixo).
@@ -203,7 +205,7 @@ Repita os **passos 1.1 a 1.4**, mas com estas diferenças:
 
 ```
 Name: Apache Airflow SSO
-Redirect URI: https://172.174.210.23:8080/oauth-authorized/azure
+Redirect URI: https://airflow.bomgado.com.br/oauth-authorized/azure
 ```
 
 Agora você terá:
@@ -518,7 +520,7 @@ docker compose logs -f airflow-webserver
 
 ### Teste 1: Superset
 
-1. Abra: https://172.174.210.23:8088
+1. Abra: https://bi.bomgado.com.br
 2. Você verá um botão **"Sign in with Azure"** com ícone Windows
 3. Clique no botão
 4. Será redirecionado para login Microsoft
@@ -527,7 +529,7 @@ docker compose logs -f airflow-webserver
 
 ### Teste 2: Airflow
 
-1. Abra: https://172.174.210.23:8080
+1. Abra: https://airflow.bomgado.com.br
 2. Clique em **"Sign in with Azure"**
 3. Login Microsoft → Redirecionamento → Acesso concedido
 
@@ -556,8 +558,8 @@ Você deve ver o usuário criado com email do Azure AD.
 **Solução:**
 1. Verifique o **Redirect URI** no Azure App Registration
 2. Deve ser exatamente:
-   - Superset: `https://172.174.210.23:8088/oauth-authorized/azure`
-   - Airflow: `https://172.174.210.23:8080/oauth-authorized/azure`
+   - Superset: `https://bi.bomgado.com.br/oauth-authorized/azure`
+   - Airflow: `https://airflow.bomgado.com.br/oauth-authorized/azure`
 3. Não pode ter `/` no final
 4. **DEVE usar HTTPS** (Azure Entra ID exige)
 

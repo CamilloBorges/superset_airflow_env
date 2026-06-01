@@ -4,10 +4,26 @@ Este guia complementa o [UBUNTU_SETUP.md](UBUNTU_SETUP.md) com instruções espe
 
 ---
 
-## 🎯 Cenário
+## ☁️ Cloudflare Tunnel (Recomendado)
+
+**Com Cloudflare Tunnel, você NÃO precisa:**
+- ❌ Abrir portas no NSG (Network Security Group)
+- ❌ Configurar IP público
+- ❌ Expor servidor à Internet
+
+> 👉 **Use Cloudflare Tunnel:** [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)  
+> Acesso seguro via `bi.bomgado.com.br` sem exposição de portas
+
+**Se você usa Cloudflare Tunnel, pode pular este documento.**
+
+---
+
+## 🎯 Cenário (Sem Cloudflare Tunnel)
+
+Se você **NÃO** usar Cloudflare Tunnel e quiser acesso direto via IP público:
 
 - VM Ubuntu no Azure
-- IP Privado: 172.174.210.23
+- IP Público: 172.174.210.23
 - Containers rodando mas não acessíveis externamente
 - **Problema**: Network Security Group (NSG) bloqueando portas
 
@@ -25,19 +41,19 @@ docker compose ps  # ✅ Todos healthy/running
 sudo ss -tlnp | grep 8080  # ✅ Docker escutando
 
 # Acesso local funciona
-curl http://localhost:8080  # ✅ Responde
+curl http://localhost:80  # ✅ Responde
 
-# Acesso externo não funciona
-curl http://172.174.210.23:8080  # ❌ Timeout
+# Acesso externo não funciona (SEM Cloudflare Tunnel)
+curl http://172.174.210.23:80  # ❌ Timeout
 ```
 
 ### Causa
 
-O **Network Security Group (NSG)** do Azure está bloqueando tráfego de entrada nas portas 8080, 8088 e 8081.
+O **Network Security Group (NSG)** do Azure está bloqueando tráfego de entrada nas portas 80, 8080 e 8081.
 
 ---
 
-## ✅ Solução: Configurar NSG no Azure Portal
+## ✅ Solução: Configurar NSG (Somente se NÃO usar Cloudflare)
 
 ### Passo 1: Acessar o Azure Portal
 

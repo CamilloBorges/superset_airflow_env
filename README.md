@@ -3,19 +3,25 @@
 Ambiente completo de Business Intelligence e Engenharia de Dados baseado em containers Docker, seguindo o princípio de **Infrastructure as Code (IaC)**.
 
 > 🚀 **Início Rápido?** Consulte [QUICKSTART.md](QUICKSTART.md) para setup em 5 minutos  
-> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para guia completo  
-> 🌩️ **Usando Azure?** Consulte [AZURE_SETUP.md](AZURE_SETUP.md) para configurar NSG e portas  
-> 🔒 **Configurar HTTPS?** Consulte [HTTPS_SETUP.md](HTTPS_SETUP.md) - Nginx já está configurado!  
+> � **Instalação Completa do Zero?** Consulte [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) - Ubuntu limpo até SSO  
+> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para preparação do servidor  
+> ☁️ **Cloudflare Tunnel?** Consulte [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) para acesso seguro  
 > 🔐 **Quer SSO com Azure Entra ID?** Consulte [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md) para configuração
 
 ## 🏗️ Arquitetura da Stack
 
 Esta plataforma integra as seguintes ferramentas open-source:
 
-- **Nginx** (Alpine) - Reverse proxy com HTTPS/SSL (porta 443, 8443, 8444)
+**Acesso e Segurança:**
+- **Cloudflare Tunnel** - Proxy seguro sem portas expostas, SSL/TLS automático, DDoS protection
+- **Nginx** (Alpine) - Reverse proxy HTTP local (porta 80, 8080, 8081)
+
+**Plataforma de Dados:**
 - **Apache Airflow** (v2.8.0) - Orquestrador de workflows com CeleryExecutor
 - **Apache Superset** (v3.0.0) - Plataforma de visualização e BI
 - **Apache Hop** (v2.7.0) - Motor de ETL/ELT
+
+**Infraestrutura:**
 - **PostgreSQL** (v15) - Banco de dados de metadados
 - **Redis** (v7) - Message broker para Celery
 
@@ -24,7 +30,15 @@ Esta plataforma integra as seguintes ferramentas open-source:
 ```
 Internet (HTTPS)
     ↓
-Nginx Reverse Proxy (443, 8443, 8444)
+bi.bomgado.com.br (Cloudflare DNS)
+    ↓
+Cloudflare Edge Network (SSL/TLS + DDoS)
+    ↓
+Cloudflare Tunnel (conexão encriptada, sem portas públicas)
+    ↓
+Servidor Azure Ubuntu (172.174.210.23)
+    ↓
+Nginx Reverse Proxy (HTTP local: 80, 8080, 8081)
     ↓
 ┌──────────────┬──────────────┬──────────────┐
 │  Superset    │   Airflow    │     Hop      │
@@ -32,10 +46,15 @@ Nginx Reverse Proxy (443, 8443, 8444)
 └──────────────┴──────────────┴──────────────┘
          ↓              ↓
     ┌────────┐     ┌─────┐
-    │ PostgreSQL │   │ Redis │
-    │   :5432   │   │ :6379 │
+    │PostgreSQL│   │Redis│
+    │  :5432   │   │:6379│
     └────────┘     └─────┘
 ```
+
+**🌐 URLs de Acesso:**
+- **Superset BI:** https://bi.bomgado.com.br
+- **Airflow:** https://airflow.bomgado.com.br
+- **Hop:** https://hop.bomgado.com.br
 
 ## 📁 Estrutura do Repositório
 
@@ -45,13 +64,11 @@ superset_airflow_env/
 ├── .gitignore                      # Arquivos ignorados pelo Git
 ├── docker-compose.yml              # Definição completa da infraestrutura (13 serviços)
 ├── README.md                       # Esta documentação
+├── INSTALLATION_GUIDE.md           # Guia completo de instalação do zero
+├── CLOUDFLARE_TUNNEL_SETUP.md      # Configuração Cloudflare Tunnel
 │
 ├── nginx/                          # Nginx Reverse Proxy
-│   └── nginx.conf                  # Configuração HTTPS
-│
-├── certs/                          # Certificados SSL (gerados automaticamente)
-│   ├── cert.pem                    # Certificado SSL
-│   └── key.pem                     # Chave privada
+│   └── nginx.conf                  # Configuração HTTP para Cloudflare Tunnel
 │
 ├── airflow/                        # Apache Airflow
 │   ├── dags/                       # DAGs (pipelines do Airflow)
@@ -77,16 +94,21 @@ superset_airflow_env/
 
 ## 🚀 Guia de Inicialização
 
+> 💡 **Instalação do Zero?** Para instalação completa em Ubuntu limpo com Cloudflare Tunnel, siga o **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - guia passo a passo de 60 minutos.
+
 ### Pré-requisitos
 
 - **Docker** (versão 20.10 ou superior)
 - **Docker Compose** (versão 2.0 ou superior)
 - Pelo menos **8GB de RAM** disponível para os containers
 - **10GB de espaço em disco** livre
-- **OpenSSL** (para geração de certificados SSL)
+- **Cloudflare Tunnel** configurado (opcional mas recomendado)
 
 > 📘 **Instalando em Ubuntu Server do Zero?**  
 > Consulte o guia completo: [UBUNTU_SETUP.md](UBUNTU_SETUP.md) - inclui instalação do Docker, configuração de permissões e setup completo passo a passo.
+
+> ☁️ **Configurando Cloudflare Tunnel?**  
+> Consulte: [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) - acesso seguro sem expor portas públicas.
 
 ### Passo 1: Clonar o Repositório
 
@@ -105,8 +127,8 @@ cp .env.example .env
 
 ⚠️ **IMPORTANTE**: Edite o arquivo `.env` e configure:
 
-1. **Domínio/IP Público** (OBRIGATÓRIO para HTTPS):
-   - `PUBLIC_DOMAIN` - Seu domínio ou IP público (ex: `172.174.210.23` ou `dados.suaempresa.com`)
+1. **Domínio Público** (OBRIGATÓRIO):
+   - `PUBLIC_DOMAIN` - Seu domínio Cloudflare (ex: `bi.bomgado.com.br`)
 
 2. **Senhas e Secrets** (OBRIGATÓRIO):
    - `POSTGRES_PASSWORD` - Senha do PostgreSQL
@@ -118,8 +140,8 @@ cp .env.example .env
 3. **Gerar Fernet Key para o Airflow**:
 
 ```bash
-# Python
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Usar Docker para gerar
+docker run --rm python:3.11-slim sh -c "pip install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
 ```
 
 Ou use Docker:
@@ -128,24 +150,20 @@ Ou use Docker:
 docker run --rm python:3.11-slim sh -c "pip install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
 ```
 
-### Passo 3: Gerar Certificados SSL
+### Passo 3: Configurar Cloudflare Tunnel (Recomendado)
 
-**Nginx requer HTTPS.** Escolha uma opção:
-
-**Opção A: Certificado Auto-assinado (Desenvolvimento/Teste)**
-
-```bash
-./generate-ssl-cert.sh
-```
-
-**Opção B: Let's Encrypt (Produção com Domínio)**
+**Com Cloudflare Tunnel, você NÃO precisa:**
+- ❌ Gerar certificados SSL localmente
+- ❌ Abrir portas no firewall/NSG
+- ❌ Configurar DNS manualmente
 
 ```bash
-# Configure PUBLIC_DOMAIN no .env primeiro
-./generate-letsencrypt-cert.sh
-```
+# Instalar e configurar cloudflared
+./configure-cloudflare.sh <SEU_TOKEN>
 
-> 📘 **Detalhes sobre HTTPS:** [HTTPS_SETUP.md](HTTPS_SETUP.md)
+# Ou siga o guia completo
+# https://github.com/seu-repositorio/CLOUDFLARE_TUNNEL_SETUP.md
+```
 
 ### Passo 4: Ajustar AIRFLOW_UID (Linux/Mac)
 
@@ -228,32 +246,37 @@ Todos os serviços devem estar com status `healthy` ou `running`.
 
 ### Passo 7: Acessar as Interfaces Web
 
-Após a inicialização completa, acesse:
+Após a inicialização completa, acesse via Cloudflare Tunnel:
 
 | Serviço | URL | Usuário Padrão | Senha Padrão |
 |---------|-----|----------------|--------------|
-| **Apache Superset** | https://SEU_DOMINIO:443 | admin | admin123 |
-| **Apache Airflow** | https://SEU_DOMINIO:8443 | admin | admin123 |
-| **Apache Hop** | https://SEU_DOMINIO:8444 | cluster | cluster |
+| **Superset BI** | https://bi.bomgado.com.br | admin | admin123 |
+| **Airflow** | https://airflow.bomgado.com.br | admin | admin123 |
+| **Hop** | https://hop.bomgado.com.br | cluster | cluster |
 
-> 💡 Substitua `SEU_DOMINIO` pelo valor de `PUBLIC_DOMAIN` configurado no .env  
-> 📝 **Exemplos:**  
-> - Com IP: `https://172.174.210.23`, `https://172.174.210.23:8443`  
-> - Com domínio: `https://dados.suaempresa.com`, `https://dados.suaempresa.com:8443`
+> 💡 URLs com HTTPS válido (certificado Cloudflare) e DDoS protection  
+> 🔒 Nenhuma porta exposta publicamente no servidor
+
+**Acesso Local (teste):**
+- Superset: http://localhost:80
+- Airflow: http://localhost:8080  
+- Hop: http://localhost:8081
 
 ⚠️ **IMPORTANTE**: 
-- Certificados auto-assinados causarão aviso de segurança (clique "Avançado" → "Prosseguir")
 - Altere as senhas padrão após o primeiro login!
+- Configure Azure Entra SSO para autenticação corporativa (opcional)
 
 ---
 
 ## 📋 Recursos Adicionais
 
+- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Guia completo de instalação do zero (Ubuntu limpo → SSO)
 - **[QUICKSTART.md](QUICKSTART.md)** - Início rápido em 5 minutos
+- **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** - Configurar Cloudflare Tunnel (recomendado)
 - **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo de instalação e verificação
 - **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Guia completo para Ubuntu Server do zero
-- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração de NSG e rede no Azure
-- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS (Nginx)
+- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração de VM Azure (opcional com Cloudflare)
+- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS sem Cloudflare
 - **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - Configurar SSO com Azure Entra ID
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solução de problemas comuns
 - **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Estrutura detalhada do projeto
