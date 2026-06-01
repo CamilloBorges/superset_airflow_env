@@ -28,6 +28,8 @@ echo -e "${YELLOW}Verificando Docker...${NC}"
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}✗ Docker não está instalado!${NC}"
     echo -e "${YELLOW}  Por favor, instale o Docker: https://docs.docker.com/get-docker/${NC}"
+    echo ""
+    echo -e "${CYAN}Para Ubuntu Server, consulte: UBUNTU_SETUP.md${NC}"
     exit 1
 fi
 
@@ -108,8 +110,24 @@ mkdir -p shared/data
 
 # Ajustar permissões (importante no Linux)
 echo -e "${YELLOW}Ajustando permissões...${NC}"
-chmod -R 755 airflow superset hop postgres shared
-chmod -R 777 airflow/logs
+chmod -R 755 airflow superset hop postgres shared 2>/dev/null || true
+chmod -R 777 airflow/logs 2>/dev/null || true
+
+# Dar permissão de execução aos scripts
+chmod +x quick-start.sh 2>/dev/null || true
+chmod +x postgres/init-scripts/*.sh 2>/dev/null || true
+
+# Ajustar propriedade para UID do Airflow (50000)
+if [ "$(id -u)" != "50000" ]; then
+    echo -e "${YELLOW}Ajustando propriedade dos diretórios do Airflow para UID 50000...${NC}"
+    if command -v sudo &> /dev/null; then
+        sudo chown -R 50000:0 airflow/ 2>/dev/null || {
+            echo -e "${YELLOW}⚠ Não foi possível alterar proprietário (sudo necessário)${NC}"
+            echo -e "${YELLOW}  Se houver problemas de permissão, execute:${NC}"
+            echo -e "${CYAN}  sudo chown -R 50000:0 airflow/${NC}"
+        }
+    fi
+fi
 
 echo -e "${GREEN}✓ Estrutura de diretórios criada!${NC}"
 echo ""

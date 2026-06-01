@@ -2,6 +2,9 @@
 
 Ambiente completo de Business Intelligence e Engenharia de Dados baseado em containers Docker, seguindo o princípio de **Infrastructure as Code (IaC)**.
 
+> 🚀 **Início Rápido?** Consulte [QUICKSTART.md](QUICKSTART.md) para setup em 5 minutos  
+> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para guia completo
+
 ## 🏗️ Arquitetura da Stack
 
 Esta plataforma integra as seguintes ferramentas open-source:
@@ -52,6 +55,9 @@ superset_airflow_env/
 - Pelo menos **8GB de RAM** disponível para os containers
 - **10GB de espaço em disco** livre
 
+> 📘 **Instalando em Ubuntu Server do Zero?**  
+> Consulte o guia completo: [UBUNTU_SETUP.md](UBUNTU_SETUP.md) - inclui instalação do Docker, configuração de permissões e setup completo passo a passo.
+
 ### Passo 1: Clonar o Repositório
 
 ```bash
@@ -97,7 +103,27 @@ echo "AIRFLOW_UID=$(id -u)" >> .env
 
 No Windows, mantenha o valor padrão `50000`.
 
-### Passo 3: Criar Diretórios com Permissões (Linux/Mac)
+### Passo 3: Ajustar Permissões (Linux/Mac)
+
+**IMPORTANTE**: No Linux/Mac, é necessário ajustar permissões antes de iniciar:
+
+```bash
+# Dar permissão de execução aos scripts
+chmod +x quick-start.sh
+chmod +x postgres/init-scripts/*.sh
+
+# Criar diretórios necessários
+mkdir -p airflow/logs airflow/dags airflow/plugins
+
+# Ajustar permissões do Airflow (UID 50000)
+sudo chown -R 50000:0 airflow/
+chmod -R 755 airflow/
+chmod -R 777 airflow/logs
+```
+
+**No Windows**, não é necessário ajustar permissões.
+
+### Passo 4: Criar Diretórios com Permissões (Linux/Mac)
 
 ```bash
 mkdir -p airflow/logs airflow/dags airflow/plugins
@@ -106,10 +132,25 @@ chmod -R 777 airflow/logs
 
 No Windows, não é necessário.
 
-### Passo 4: Inicializar o Ambiente
+### Passo 5: Inicializar o Ambiente
 
 Execute o comando para subir todos os serviços:
 
+**Linux/Mac:**
+```bash
+# Dar permissão de execução ao script (primeira vez)
+chmod +x quick-start.sh
+
+# Executar script de inicialização
+./quick-start.sh
+```
+
+**Windows PowerShell:**
+```powershell
+.\quick-start.ps1
+```
+
+**Ou manualmente (qualquer plataforma):**
 ```bash
 docker compose up -d
 ```
@@ -125,7 +166,7 @@ Este comando irá:
 
 ⏱️ **Tempo estimado**: 5-10 minutos na primeira execução.
 
-### Passo 5: Verificar o Status dos Serviços
+### Passo 6: Verificar o Status dos Serviços
 
 ```bash
 docker compose ps
@@ -133,7 +174,7 @@ docker compose ps
 
 Todos os serviços devem estar com status `healthy` ou `running`.
 
-### Passo 6: Acessar as Interfaces Web
+### Passo 7: Acessar as Interfaces Web
 
 Após a inicialização completa, acesse:
 
@@ -144,6 +185,18 @@ Após a inicialização completa, acesse:
 | **Apache Hop** | http://localhost:8081 | cluster | cluster |
 
 ⚠️ **IMPORTANTE**: Altere as senhas padrão após o primeiro login!
+
+---
+
+## 📋 Recursos Adicionais
+
+- **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo de instalação e verificação
+- **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Guia completo para Ubuntu Server do zero
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solução de problemas comuns
+- **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Estrutura detalhada do projeto
+- **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** - Guia de uso do Apache Hop
+
+---
 
 ## 🔧 Operações Comuns
 

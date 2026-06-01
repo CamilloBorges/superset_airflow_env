@@ -8,7 +8,10 @@ superset_airflow_env/
 ├── 📄 .gitignore                       # Arquivos ignorados pelo Git
 ├── 📄 docker-compose.yml               # Orquestração de containers
 ├── 📄 README.md                        # Documentação principal
+├── 📄 UBUNTU_SETUP.md                  # Setup completo Ubuntu Server do zero
+├── 📄 CHECKLIST.md                     # Checklist de instalação
 ├── 📄 TROUBLESHOOTING.md               # Guia de solução de problemas
+├── 📄 PROJECT_STRUCTURE.md             # Esta documentação
 ├── 📄 Makefile                         # Comandos auxiliares (Linux/Mac)
 ├── 📄 quick-start.sh                   # Script de inicialização (Linux/Mac)
 ├── 📄 quick-start.ps1                  # Script de inicialização (Windows)
@@ -74,7 +77,10 @@ superset_airflow_env/
 | Arquivo | Descrição |
 |---------|-----------|
 | `README.md` | Guia completo do projeto |
+| `UBUNTU_SETUP.md` | Setup completo para Ubuntu Server do zero |
+| `CHECKLIST.md` | Checklist de instalação e verificação |
 | `TROUBLESHOOTING.md` | Soluções para problemas comuns |
+| `PROJECT_STRUCTURE.md` | Estrutura detalhada do projeto |
 | `hop/HOP_GUIDE.md` | Guia específico do Apache Hop |
 
 ### 🚀 Scripts de Automação
@@ -246,15 +252,24 @@ Estes arquivos **DEVEM** ser commitados no Git:
 
 ## 🎓 Próximos Passos
 
+### Para Ubuntu Server do Zero:
+1. ✅ Consultar **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** para instalação completa
+2. ✅ Instalar Docker e Docker Compose
+3. ✅ Clonar/criar repositório Git
+4. ✅ Seguir passos do guia Ubuntu
+
+### Para Ambiente com Docker já instalado:
 1. ✅ Clonar/criar repositório Git
 2. ✅ Copiar `.env.example` para `.env`
-3. ✅ Gerar chaves de segurança com `generate_secrets.py`
+3. ✅ Gerar chaves de segurança com `generate_secrets.py` ou Docker
 4. ✅ Editar `.env` com as chaves geradas
-5. ✅ Executar `docker compose up -d`
-6. ✅ Acessar Airflow, Superset e Hop
-7. ✅ Criar seus primeiros pipelines Hop
-8. ✅ Criar DAGs no Airflow para orquestrar
-9. ✅ Criar dashboards no Superset
+5. ✅ Ajustar permissões (Linux/Mac): `chmod +x quick-start.sh`
+6. ✅ Executar `./quick-start.sh` ou `docker compose up -d`
+7. ✅ Verificar com **[CHECKLIST.md](CHECKLIST.md)**
+8. ✅ Acessar Airflow, Superset e Hop
+9. ✅ Criar seus primeiros pipelines Hop
+10. ✅ Criar DAGs no Airflow para orquestrar
+11. ✅ Criar dashboards no Superset
 
 ---
 
