@@ -1,0 +1,365 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.0-python3.11
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+    AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+    AIRFLOW__CORE__PARALLELISM: ${AIRFLOW__CORE__PARALLELISM}
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: ${AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: ${AIRFLOW__WEBSERVER__EXPOSE_CONFIG}
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW_UID: ${AIRFLOW_UID}
+    TZ: ${TIMEZONE}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./airflow/config:/opt/airflow/config
+    - ./shared:/shared
+    - ./hop/projects:/hop/projects:ro
+  user: "${AIRFLOW_UID}:0"
+  networks:
+    - data-platform-network
+
+services:
+  # =============================================================================
+  # POSTGRESQL - Banco de Dados de Metadados
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      TZ: ${TIMEZONE}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - data-platform-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # REDIS - Message Broker
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      TZ: ${TIMEZONE}
+    ports:
+      - "${REDIS_EXTERNAL_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - data-platform-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # AIRFLOW - Inicialização do Banco de Dados
+  # =============================================================================
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins}
+        exec /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      _AIRFLOW_WWW_USER_FIRSTNAME: ${AIRFLOW_ADMIN_FIRSTNAME}
+      _AIRFLOW_WWW_USER_LASTNAME: ${AIRFLOW_ADMIN_LASTNAME}
+      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+      _AIRFLOW_WWW_USER_ROLE: Admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  # =============================================================================
+  # AIRFLOW - Webserver
+  # =============================================================================
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "${AIRFLOW_EXTERNAL_PORT}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # =============================================================================
+  # AIRFLOW - Scheduler
+  # =============================================================================
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # =============================================================================
+  # AIRFLOW - Worker (apenas para CeleryExecutor)
+  # =============================================================================
+  airflow-worker:
+    <<: *airflow-common
+    container_name: airflow-worker
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      DUMB_INIT_SETSID: "0"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # =============================================================================
+  # AIRFLOW - Triggerer
+  # =============================================================================
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # =============================================================================
+  # SUPERSET - Inicialização
+  # =============================================================================
+  superset-init:
+    image: apache/superset:3.0.0
+    container_name: superset-init
+    environment:
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: ${POSTGRES_SUPERSET_DB}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      TZ: ${TIMEZONE}
+    command: >
+      bash -c "
+      superset db upgrade &&
+      superset fab create-admin \
+        --username ${SUPERSET_ADMIN_USERNAME} \
+        --firstname ${SUPERSET_ADMIN_FIRSTNAME} \
+        --lastname ${SUPERSET_ADMIN_LASTNAME} \
+        --email ${SUPERSET_ADMIN_EMAIL} \
+        --password ${SUPERSET_ADMIN_PASSWORD} || true &&
+      superset init
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data-platform-network
+    volumes:
+      - ./superset/config:/app/superset_home
+    restart: "no"
+
+  # =============================================================================
+  # SUPERSET - Webserver
+  # =============================================================================
+  superset:
+    image: apache/superset:3.0.0
+    container_name: superset
+    environment:
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: ${POSTGRES_SUPERSET_DB}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      TZ: ${TIMEZONE}
+    ports:
+      - "${SUPERSET_EXTERNAL_PORT}:8088"
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    networks:
+      - data-platform-network
+    volumes:
+      - ./superset/config:/app/superset_home
+      - ./superset/data:/app/superset_data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # =============================================================================
+  # SUPERSET - Celery Worker (para relatórios agendados)
+  # =============================================================================
+  superset-worker:
+    image: apache/superset:3.0.0
+    container_name: superset-worker
+    command: celery --app=superset.tasks.celery_app:app worker --pool=prefork -O fair -c 4
+    environment:
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: ${POSTGRES_SUPERSET_DB}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      TZ: ${TIMEZONE}
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    networks:
+      - data-platform-network
+    volumes:
+      - ./superset/config:/app/superset_home
+      - ./superset/data:/app/superset_data
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # =============================================================================
+  # SUPERSET - Celery Beat (agendador de tarefas)
+  # =============================================================================
+  superset-beat:
+    image: apache/superset:3.0.0
+    container_name: superset-beat
+    command: celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule
+    environment:
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: ${POSTGRES_HOST}
+      DATABASE_PORT: ${POSTGRES_PORT}
+      DATABASE_DB: ${POSTGRES_SUPERSET_DB}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      TZ: ${TIMEZONE}
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    networks:
+      - data-platform-network
+    volumes:
+      - ./superset/config:/app/superset_home
+    restart: unless-stopped
+
+  # =============================================================================
+  # APACHE HOP - Motor de ETL
+  # =============================================================================
+  hop-server:
+    image: apache/hop:2.7.0
+    container_name: hop-server
+    environment:
+      HOP_SERVER_USER: ${HOP_SERVER_USER}
+      HOP_SERVER_PASS: ${HOP_SERVER_PASS}
+      HOP_SERVER_PORT: ${HOP_SERVER_PORT}
+      TZ: ${TIMEZONE}
+    ports:
+      - "${HOP_EXTERNAL_PORT}:${HOP_SERVER_PORT}"
+    volumes:
+      - ./hop/config:/opt/hop/config
+      - ./hop/projects:/opt/hop/projects
+      - ./hop/metadata:/opt/hop/metadata
+      - ./shared:/shared
+    networks:
+      - data-platform-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:${HOP_SERVER_PORT}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  data-platform-network:
+    driver: bridge
+    name: data-platform-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  postgres-data:
+    name: postgres-data
