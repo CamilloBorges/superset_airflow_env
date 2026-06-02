@@ -184,6 +184,11 @@ load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         print_step "Carregando configuração de $CONFIG_FILE..."
         
+        # Corrigir quebras de linha Windows (CRLF → LF) se necessário
+        if file "$CONFIG_FILE" 2>/dev/null | grep -q "CRLF"; then
+            sed -i 's/\r$//' "$CONFIG_FILE" 2>/dev/null || true
+        fi
+        
         # Source do arquivo de configuração
         set -a  # Auto export variables
         source "$CONFIG_FILE"
