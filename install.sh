@@ -355,10 +355,10 @@ generate_secrets() {
     AIRFLOW__CORE__FERNET_KEY=$(docker_cmd run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
     
     print_step "Gerando Airflow Webserver Secret Key..."
-    AIRFLOW__WEBSERVER__SECRET_KEY=$(openssl rand -base64 50 | tr -d "=+/")
+    AIRFLOW__WEBSERVER__SECRET_KEY=$(openssl rand -base64 50 | tr -d '\n' | tr -d "=+/")
     
     print_step "Gerando Superset Secret Key..."
-    SUPERSET_SECRET_KEY=$(openssl rand -base64 50 | tr -d "=+/")
+    SUPERSET_SECRET_KEY=$(openssl rand -base64 50 | tr -d '\n' | tr -d "=+/")
     
     print_success "Todos os secrets gerados!"
 }
