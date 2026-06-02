@@ -3,6 +3,26 @@
 *.env
 !.env.example
 
+# Arquivos de configuração com secrets (não commitados)
+airflow/config/webserver_config.py
+superset/config/superset_config.py
+**/config/*_config.py
+!**/config/*_config.py.example
+
+# Certificados SSL
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Arquivos temporários com possíveis secrets
+*.txt
+!requirements.txt
+!**/requirements.txt
+Untitled-*
+
 # Logs do Airflow
 airflow/logs/*
 !airflow/logs/.gitkeep
