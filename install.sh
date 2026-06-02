@@ -506,12 +506,14 @@ create_directory_structure() {
 configure_permissions() {
     print_header "Configurando Permissões"
     
-    print_step "Ajustando permissões básicas..."
-    chmod -R 755 airflow superset hop postgres shared nginx
-    chmod -R 777 airflow/logs
-    
     print_step "Configurando permissões do Airflow (UID 50000)..."
+    # Fazer chown primeiro para tomar ownership dos arquivos
     sudo chown -R 50000:0 airflow/
+    
+    print_step "Ajustando permissões básicas..."
+    # Usar sudo para chmod pois os arquivos podem pertencer a outros usuários
+    sudo chmod -R 755 airflow superset hop postgres shared nginx 2>/dev/null || true
+    sudo chmod -R 777 airflow/logs 2>/dev/null || true
     
     print_step "Tornando scripts executáveis..."
     chmod +x *.sh 2>/dev/null || true
