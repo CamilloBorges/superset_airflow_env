@@ -29,8 +29,14 @@ cd data-platform
 
 # Executar instalação automática
 chmod +x install.sh
-sudo ./install.sh --auto
+./install.sh --auto
 ```
+
+**⚠️ IMPORTANTE - Permissões Docker:**
+- O script NÃO deve ser executado com `sudo`
+- O script detecta automaticamente se você precisa de permissões Docker
+- Durante a instalação, usará `sudo docker` apenas para comandos necessários
+- Após logout/login, não precisará mais de `sudo` para Docker
 
 **O que será instalado automaticamente:**
 - ✅ Dependências do sistema (curl, git, etc)
@@ -234,6 +240,35 @@ cp .env .env.backup
 ---
 
 ## 🆘 Troubleshooting Rápido
+
+### Erro: "permission denied while trying to connect to the Docker daemon socket"
+
+**Causa:** Usuário não tem permissões Docker ainda.
+
+**Solução 1 - Aguardar instalação completar:**
+```bash
+# O script usa 'sudo docker' automaticamente durante instalação
+# Após concluir, faça logout/login:
+exit
+ssh -i ~/.ssh/key.pem user@server
+cd data-platform
+
+# Agora pode usar docker sem sudo
+docker compose ps
+```
+
+**Solução 2 - Aplicar permissões imediatamente (alternativa):**
+```bash
+# Em outra aba do terminal, execute:
+newgrp docker
+
+# Ou reinicie o script na nova sessão:
+exit
+ssh -i ~/.ssh/key.pem user@server
+cd data-platform
+newgrp docker
+./install.sh --auto
+```
 
 ### Logs da instalação:
 

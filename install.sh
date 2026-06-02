@@ -9,6 +9,12 @@
 #   ./install.sh --config install.config  # Usando arquivo de configuração
 #   ./install.sh --help                   # Ajuda
 #
+# IMPORTANTE - Permissões:
+#   - NÃO execute este script com sudo
+#   - Execute como usuário normal (o script pedirá sudo quando necessário)
+#   - O script usa 'sudo docker' automaticamente durante instalação
+#   - Após logout/login, não precisará mais de sudo para Docker
+#
 # ===========================================================
 
 set -e  # Exit on error
@@ -58,6 +64,7 @@ SETUP_AZURE_SSO="no"
 RUN_TESTS="yes"
 STARTUP_WAIT_TIME=120
 CREATE_BACKUP="no"
+USE_SUDO_DOCKER=false
 
 # =============================================================================
 # FUNÇÕES AUXILIARES
@@ -65,6 +72,23 @@ CREATE_BACKUP="no"
 
 log() {
     echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $*" | tee -a "$LOG_FILE"
+}
+
+# Função para executar comandos docker com sudo se necessário
+docker_cmd() {
+    if [ "$USE_SUDO_DOCKER" = true ]; then
+        sudo docker "$@"
+    else
+        docker "$@"
+    fi
+}
+
+docker_compose_cmd() {
+    if [ "$USE_SUDO_DOCKER" = true ]; then
+        sudo docker compose "$@"
+    else
+        docker compose "$@"
+    fi
 }
 
 print_header() {
@@ -263,6 +287,15 @@ install_docker() {
     if command -v docker &> /dev/null; then
         local docker_version=$(docker --version)
         print_success "Docker já instalado: $docker_version"
+        
+        # Verificar se usuário já tem permissões Docker
+        if docker ps &> /dev/null; then
+            print_success "Usuário já tem permissões Docker"
+            USE_SUDO_DOCKER=false
+        else
+            print_info "Usuário não tem permissões Docker ainda"
+            USE_SUDO_DOCKER=true
+        fi
         return 0
     fi
     
@@ -299,8 +332,10 @@ configure_docker_permissions() {
     sudo usermod -aG docker $USER
     
     print_success "Usuário $USER adicionado ao grupo docker"
-    print_warning "Você precisará fazer logout/login para aplicar as permissões"
-    print_info "Ou execute: newgrp docker"
+    print_info "Usando 'sudo docker' durante instalação (permissões aplicadas após logout/login)"
+    
+    # Marcar que precisamos usar sudo docker
+    USE_SUDO_DOCKER=true
 }
 
 # =============================================================================
@@ -317,7 +352,7 @@ generate_secrets() {
     REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
     
     print_step "Gerando Airflow Fernet Key..."
-    AIRFLOW__CORE__FERNET_KEY=$(docker run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
+    AIRFLOW__CORE__FERNET_KEY=$(docker_cmd run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
     
     print_step "Gerando Airflow Webserver Secret Key..."
     AIRFLOW__WEBSERVER__SECRET_KEY=$(openssl rand -base64 50 | tr -d "=+/")
@@ -599,10 +634,10 @@ deploy_platform() {
     print_header "Deploy da Plataforma"
     
     print_step "Baixando imagens Docker (pode levar alguns minutos)..."
-    docker compose pull
+    docker_compose_cmd pull
     
     print_step "Iniciando containers..."
-    docker compose up -d
+    docker_compose_cmd up -d
     
     print_info "Aguardando containers inicializarem ($STARTUP_WAIT_TIME segundos)..."
     
@@ -628,14 +663,23 @@ run_tests() {
     
     # Teste 1: Containers rodando
     print_step "Verificando status dos containers..."
-    local running=$(docker compose ps --format json | jq -r '.State' | grep -c "running" || echo "0")
-    local total=$(docker compose ps --format json | wc -l)
     
-    if [ "$running" -eq "$total" ]; then
+    # Usar docker_compose_cmd para respeitar permissões
+    if command -v jq &> /dev/null; then
+        local running=$(docker_compose_cmd ps --format json 2>/dev/null | jq -r '.State' | grep -c "running" || echo "0")
+        local total=$(docker_compose_cmd ps --format json 2>/dev/null | wc -l)
+    else
+        # Fallback sem jq
+        local running=$(docker_compose_cmd ps | grep -c "Up" || echo "0")
+        local total=$(docker_compose_cmd ps | wc -l)
+        ((total=total-2))  # Remover header
+    fi
+    
+    if [ "$running" -gt 0 ] && [ "$running" -eq "$total" ]; then
         print_success "Todos os $total containers estão rodando"
     else
         print_warning "$running de $total containers rodando"
-        docker compose ps
+        docker_compose_cmd ps
         ((failed++))
     fi
     
@@ -720,11 +764,23 @@ print_summary() {
     
     echo -e "${CYAN}📝 Comandos Úteis:${NC}"
     echo ""
-    echo -e "  ${WHITE}Status:${NC}              docker compose ps"
-    echo -e "  ${WHITE}Logs:${NC}                docker compose logs -f"
-    echo -e "  ${WHITE}Reiniciar:${NC}           docker compose restart"
-    echo -e "  ${WHITE}Parar:${NC}               docker compose down"
-    echo -e "  ${WHITE}Iniciar:${NC}             docker compose up -d"
+    
+    # Ajustar comandos se usar sudo
+    if [ "$USE_SUDO_DOCKER" = true ]; then
+        echo -e "  ${WHITE}Status:${NC}              sudo docker compose ps"
+        echo -e "  ${WHITE}Logs:${NC}                sudo docker compose logs -f"
+        echo -e "  ${WHITE}Reiniciar:${NC}           sudo docker compose restart"
+        echo -e "  ${WHITE}Parar:${NC}               sudo docker compose down"
+        echo -e "  ${WHITE}Iniciar:${NC}             sudo docker compose up -d"
+        echo ""
+        echo -e "  ${WARN} ${YELLOW}Após logout/login, não precisará mais de 'sudo'${NC}"
+    else
+        echo -e "  ${WHITE}Status:${NC}              docker compose ps"
+        echo -e "  ${WHITE}Logs:${NC}                docker compose logs -f"
+        echo -e "  ${WHITE}Reiniciar:${NC}           docker compose restart"
+        echo -e "  ${WHITE}Parar:${NC}               docker compose down"
+        echo -e "  ${WHITE}Iniciar:${NC}             docker compose up -d"
+    fi
     
     if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
         echo -e "  ${WHITE}Cloudflare Tunnel:${NC}   sudo systemctl status cloudflared"

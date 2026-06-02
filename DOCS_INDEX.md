@@ -16,6 +16,7 @@ Guia completo de toda a documentação disponível neste projeto.
 | **[AZURE_SETUP.md](AZURE_SETUP.md)** | Azure VM (somente se NÃO usar Cloudflare Tunnel) | 🌩️ 10 minutos |
 | **[HTTPS_SETUP.md](HTTPS_SETUP.md)** | SSL/TLS manual (somente se NÃO usar Cloudflare Tunnel) | 🔒 15-30 minutos |
 | **[AZURE_SSO_RESUMO.md](AZURE_SSO_RESUMO.md)** | Resumo executivo do SSO com Azure Entra ID | 🔐 5 minutos leitura |
+| **[PERMISSIONS_FAQ.md](PERMISSIONS_FAQ.md)** | 🆕 FAQ sobre permissões, sudo e Docker | ❓ 3 minutos leitura |
 | **[CHECKLIST.md](CHECKLIST.md)** | Verificar se todos os passos foram executados corretamente | ✅ 5 minutos |
 
 ---

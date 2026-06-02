@@ -22,6 +22,30 @@ Este diretório contém scripts inteligentes que automatizam 100% da instalaçã
 ### Descrição
 Script principal que orquestra toda a instalação do zero. Detecta o sistema, instala dependências, configura tudo e valida a instalação.
 
+### ⚠️ Importante - Permissões
+
+**NÃO execute o script com sudo:**
+```bash
+# ❌ ERRADO
+sudo ./install.sh --auto
+
+# ✅ CORRETO
+./install.sh --auto
+```
+
+**Por que?**
+- O script verifica se está sendo executado como root e aborta
+- Executar como sudo criaria arquivos com ownership incorreto
+- O script detecta automaticamente se precisa de permissões Docker
+- Usa `sudo docker` apenas para comandos específicos durante instalação
+- Após logout/login, não precisará mais de sudo
+
+**Permissões Docker:**
+1. Script adiciona usuário ao grupo `docker`
+2. Durante instalação, usa `sudo docker` automaticamente
+3. Após instalação, faça logout/login
+4. Depois disso, pode usar `docker` sem sudo
+
 ### Opções de Uso
 
 #### 1️⃣ Modo Automático (Recomendado para CI/CD)
@@ -369,9 +393,35 @@ docker compose up -d --build
 
 ## ⚠️ Troubleshooting dos Scripts
 
-### Erro: "Permission denied"
+### Erro: "Permission denied" ao executar script
 ```bash
 chmod +x *.sh
+```
+
+### Erro: "Don't run this script as root"
+```bash
+# NÃO use sudo para executar o script inteiro
+# ❌ sudo ./install.sh
+# ✅ ./install.sh
+```
+
+### Erro: "permission denied while trying to connect to the Docker daemon socket"
+
+**Causa:** Permissões Docker não aplicadas ainda na sessão atual.
+
+**Solução Automática:** O script já trata isso! Ele usa `sudo docker` automaticamente durante a instalação.
+
+**Se quiser evitar sudo completamente:**
+```bash
+# Opção 1: Executar em nova sessão com permissões
+newgrp docker
+./install.sh --auto
+
+# Opção 2: Logout/Login e executar depois
+exit
+ssh user@server
+cd data-platform
+./install.sh --auto
 ```
 
 ### Erro: "Docker não encontrado" após instalação
