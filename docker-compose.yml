@@ -371,10 +371,8 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nginx-proxy
-    ports:
-      - "80:80"       # Superset (bi.bomgado.com.br)
-      - "8080:8080"   # Airflow (airflow.bomgado.com.br)
-      - "8081:8081"   # Hop (hop.bomgado.com.br)
+    # Cloudflare Tunnel se conecta via rede interna - não precisa expor portas
+    # Para acesso local direto, use: airflow-webserver:8080, superset:8088, hop-server:8081
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
