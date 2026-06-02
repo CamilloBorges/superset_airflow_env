@@ -384,22 +384,33 @@ create_env_file() {
     
     print_step "Atualizando valores..."
     
-    # Substituir valores no .env
-    sed -i "s|^PUBLIC_DOMAIN=.*|PUBLIC_DOMAIN=$PUBLIC_DOMAIN|" .env
-    sed -i "s|^TIMEZONE=.*|TIMEZONE=$TIMEZONE|" .env
-    sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" .env
-    sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$REDIS_PASSWORD|" .env
-    sed -i "s|^AIRFLOW__CORE__FERNET_KEY=.*|AIRFLOW__CORE__FERNET_KEY=$AIRFLOW__CORE__FERNET_KEY|" .env
-    sed -i "s|^AIRFLOW__WEBSERVER__SECRET_KEY=.*|AIRFLOW__WEBSERVER__SECRET_KEY=$AIRFLOW__WEBSERVER__SECRET_KEY|" .env
-    sed -i "s|^SUPERSET_SECRET_KEY=.*|SUPERSET_SECRET_KEY=$SUPERSET_SECRET_KEY|" .env
+    # Usar @ como delimitador no sed para evitar problemas com caracteres especiais
+    # Escapar & que tem significado especial no sed
+    POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed 's/[&/\]/\\&/g')
+    REDIS_PASSWORD_ESCAPED=$(echo "$REDIS_PASSWORD" | sed 's/[&/\]/\\&/g')
+    AIRFLOW__CORE__FERNET_KEY_ESCAPED=$(echo "$AIRFLOW__CORE__FERNET_KEY" | sed 's/[&/\]/\\&/g')
+    AIRFLOW__WEBSERVER__SECRET_KEY_ESCAPED=$(echo "$AIRFLOW__WEBSERVER__SECRET_KEY" | sed 's/[&/\]/\\&/g')
+    SUPERSET_SECRET_KEY_ESCAPED=$(echo "$SUPERSET_SECRET_KEY" | sed 's/[&/\]/\\&/g')
+    
+    # Substituir valores no .env usando @ como delimitador
+    sed -i "s@^PUBLIC_DOMAIN=.*@PUBLIC_DOMAIN=$PUBLIC_DOMAIN@" .env
+    sed -i "s@^TIMEZONE=.*@TIMEZONE=$TIMEZONE@" .env
+    sed -i "s@^POSTGRES_PASSWORD=.*@POSTGRES_PASSWORD=$POSTGRES_PASSWORD_ESCAPED@" .env
+    sed -i "s@^REDIS_PASSWORD=.*@REDIS_PASSWORD=$REDIS_PASSWORD_ESCAPED@" .env
+    sed -i "s@^AIRFLOW__CORE__FERNET_KEY=.*@AIRFLOW__CORE__FERNET_KEY=$AIRFLOW__CORE__FERNET_KEY_ESCAPED@" .env
+    sed -i "s@^AIRFLOW__WEBSERVER__SECRET_KEY=.*@AIRFLOW__WEBSERVER__SECRET_KEY=$AIRFLOW__WEBSERVER__SECRET_KEY_ESCAPED@" .env
+    sed -i "s@^SUPERSET_SECRET_KEY=.*@SUPERSET_SECRET_KEY=$SUPERSET_SECRET_KEY_ESCAPED@" .env
     
     # Azure SSO (se configurado)
     if [ "$SETUP_AZURE_SSO" = "yes" ]; then
-        sed -i "s|^# AZURE_TENANT_ID=.*|AZURE_TENANT_ID=$AZURE_TENANT_ID|" .env
-        sed -i "s|^# AZURE_SUPERSET_CLIENT_ID=.*|AZURE_SUPERSET_CLIENT_ID=$AZURE_SUPERSET_CLIENT_ID|" .env
-        sed -i "s|^# AZURE_SUPERSET_CLIENT_SECRET=.*|AZURE_SUPERSET_CLIENT_SECRET=$AZURE_SUPERSET_CLIENT_SECRET|" .env
-        sed -i "s|^# AZURE_AIRFLOW_CLIENT_ID=.*|AZURE_AIRFLOW_CLIENT_ID=$AZURE_AIRFLOW_CLIENT_ID|" .env
-        sed -i "s|^# AZURE_AIRFLOW_CLIENT_SECRET=.*|AZURE_AIRFLOW_CLIENT_SECRET=$AZURE_AIRFLOW_CLIENT_SECRET|" .env
+        AZURE_SUPERSET_CLIENT_SECRET_ESCAPED=$(echo "$AZURE_SUPERSET_CLIENT_SECRET" | sed 's/[&/\]/\\&/g')
+        AZURE_AIRFLOW_CLIENT_SECRET_ESCAPED=$(echo "$AZURE_AIRFLOW_CLIENT_SECRET" | sed 's/[&/\]/\\&/g')
+        
+        sed -i "s@^# AZURE_TENANT_ID=.*@AZURE_TENANT_ID=$AZURE_TENANT_ID@" .env
+        sed -i "s@^# AZURE_SUPERSET_CLIENT_ID=.*@AZURE_SUPERSET_CLIENT_ID=$AZURE_SUPERSET_CLIENT_ID@" .env
+        sed -i "s@^# AZURE_SUPERSET_CLIENT_SECRET=.*@AZURE_SUPERSET_CLIENT_SECRET=$AZURE_SUPERSET_CLIENT_SECRET_ESCAPED@" .env
+        sed -i "s@^# AZURE_AIRFLOW_CLIENT_ID=.*@AZURE_AIRFLOW_CLIENT_ID=$AZURE_AIRFLOW_CLIENT_ID@" .env
+        sed -i "s@^# AZURE_AIRFLOW_CLIENT_SECRET=.*@AZURE_AIRFLOW_CLIENT_SECRET=$AZURE_AIRFLOW_CLIENT_SECRET_ESCAPED@" .env
     fi
     
     print_success "Arquivo .env criado e configurado!"
