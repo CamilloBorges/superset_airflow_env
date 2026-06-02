@@ -1,0 +1,126 @@
+# install.config - Arquivo de Configuração de Instalação
+# ===========================================================
+# Copie este arquivo para install.config e preencha os valores
+# Uso: ./install.sh --config install.config
+
+# =============================================================================
+# INFORMAÇÕES BÁSICAS
+# =============================================================================
+
+# Domínio público (usado para Cloudflare e HTTPS)
+PUBLIC_DOMAIN=bi.bomgado.com.br
+
+# Timezone do servidor
+TIMEZONE=America/Sao_Paulo
+
+# Modo de instalação: auto, interactive
+# - auto: Executa tudo sem pedir confirmação
+# - interactive: Pede confirmação em cada etapa
+INSTALL_MODE=interactive
+
+# =============================================================================
+# DOCKER
+# =============================================================================
+
+# Instalar Docker automaticamente? (yes/no)
+INSTALL_DOCKER=yes
+
+# Adicionar usuário atual ao grupo docker? (yes/no)
+CONFIGURE_DOCKER_PERMISSIONS=yes
+
+# =============================================================================
+# CLOUDFLARE TUNNEL
+# =============================================================================
+
+# Configurar Cloudflare Tunnel? (yes/no)
+SETUP_CLOUDFLARE=yes
+
+# Token do Cloudflare Tunnel (deixe vazio para pedir durante instalação)
+# Obtenha em: https://dash.cloudflare.com → Zero Trust → Tunnels
+CLOUDFLARE_TUNNEL_TOKEN=
+
+# Public Hostnames (automático se SETUP_CLOUDFLARE=yes)
+# bi.bomgado.com.br → localhost:80
+# airflow.bomgado.com.br → localhost:8080
+# hop.bomgado.com.br → localhost:8081
+
+# =============================================================================
+# SEGURANÇA - GERAÇÃO AUTOMÁTICA DE SECRETS
+# =============================================================================
+
+# Gerar secrets automaticamente? (yes/no)
+# Se yes, ignora os valores abaixo e gera automaticamente
+AUTO_GENERATE_SECRETS=yes
+
+# Se AUTO_GENERATE_SECRETS=no, preencha abaixo:
+POSTGRES_PASSWORD=
+REDIS_PASSWORD=
+AIRFLOW__CORE__FERNET_KEY=
+AIRFLOW__WEBSERVER__SECRET_KEY=
+SUPERSET_SECRET_KEY=
+
+# =============================================================================
+# SSL/TLS (apenas se NÃO usar Cloudflare Tunnel)
+# =============================================================================
+
+# Configurar SSL? (yes/no/skip)
+# skip: Não configurar (use com Cloudflare Tunnel)
+# yes: Configurar com opção abaixo
+SETUP_SSL=skip
+
+# Tipo de certificado: selfsigned, letsencrypt
+SSL_TYPE=selfsigned
+
+# Email para Let's Encrypt (apenas se SSL_TYPE=letsencrypt)
+LETSENCRYPT_EMAIL=admin@bomgado.com.br
+
+# =============================================================================
+# AZURE ENTRA ID SSO (OPCIONAL)
+# =============================================================================
+
+# Configurar Azure Entra SSO? (yes/no)
+SETUP_AZURE_SSO=no
+
+# Azure Tenant ID (mesmo para Airflow e Superset)
+AZURE_TENANT_ID=
+
+# Superset App Registration
+AZURE_SUPERSET_CLIENT_ID=
+AZURE_SUPERSET_CLIENT_SECRET=
+
+# Airflow App Registration
+AZURE_AIRFLOW_CLIENT_ID=
+AZURE_AIRFLOW_CLIENT_SECRET=
+
+# =============================================================================
+# USUÁRIOS ADMIN PADRÃO
+# =============================================================================
+
+# Airflow Admin
+AIRFLOW_ADMIN_USERNAME=admin
+AIRFLOW_ADMIN_PASSWORD=admin123
+AIRFLOW_ADMIN_EMAIL=admin@dataplatform.local
+
+# Superset Admin
+SUPERSET_ADMIN_USERNAME=admin
+SUPERSET_ADMIN_PASSWORD=admin123
+SUPERSET_ADMIN_EMAIL=admin@dataplatform.local
+
+# =============================================================================
+# OPÇÕES AVANÇADAS
+# =============================================================================
+
+# Criar backup antes de iniciar? (yes/no)
+CREATE_BACKUP=no
+
+# Diretório de backup
+BACKUP_DIR=/tmp/dataplatform_backup
+
+# Executar testes após instalação? (yes/no)
+RUN_TESTS=yes
+
+# Tempo de espera para containers iniciarem (segundos)
+STARTUP_WAIT_TIME=120
+
+# Abrir navegador automaticamente após instalação? (yes/no)
+OPEN_BROWSER=no

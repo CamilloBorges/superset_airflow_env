@@ -8,7 +8,8 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Documento | Quando Usar | Tempo Estimado |
 |-----------|-------------|----------------|
-| **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** | ⭐ **Instalação completa do zero** (Ubuntu limpo → SSO) | 🕐 60-80 minutos |
+| **[AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)** | ⭐ **NOVO! Instalação 100% automatizada** (Ubuntu limpo → Produção) | ⚡ **15-20 minutos** |
+| **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** | Instalação manual completa do zero (Ubuntu limpo → SSO) | 🕐 60-80 minutos |
 | **[QUICKSTART.md](QUICKSTART.md)** | Você já tem Docker instalado e quer começar rapidamente | ⚡ 5 minutos |
 | **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** | Configurar acesso seguro via Cloudflare (recomendado) | ☁️ 15 minutos |
 | **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** | Ubuntu Server zerado (sem Cloudflare Tunnel) | 🐧 30-60 minutos |
@@ -24,8 +25,10 @@ Guia completo de toda a documentação disponível neste projeto.
 | Documento | Descrição | Para Quem |
 |-----------|-----------|-----------|
 | **[README.md](README.md)** | Documentação principal com guia completo de instalação e uso | 📘 Todos os usuários |
+| **[EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)** | 🆕 Resumo executivo - benefícios, custos, ROI, métricas | 👔 Gestores e Tomadores de Decisão |
 | **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** | Estrutura visual detalhada do projeto e organização de arquivos | 🗂️ Desenvolvedores e administradores |
 | **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Solução de problemas comuns com diagnóstico e correções | 🔧 Quando algo não funciona |
+| **[AUTOMATION_CHANGELOG.md](AUTOMATION_CHANGELOG.md)** | 🆕 Changelog da refatoração de automação completa | 📋 Histórico de mudanças |
 
 ---
 
@@ -33,6 +36,7 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Documento | Foco | Público |
 |-----------|------|---------|
+| **[AUTOMATION_SCRIPTS_GUIDE.md](AUTOMATION_SCRIPTS_GUIDE.md)** | 🆕 Guia completo de uso dos scripts de automação | 🤖 DevOps / Automação |
 | **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** | Configurar Cloudflare Tunnel (acesso seguro sem expor portas) | ☁️ Recomendado para produção |
 | **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** | Guia completo do Apache Hop: projetos, pipelines, workflows | 🔄 Engenheiros de Dados |
 | **[AZURE_SETUP.md](AZURE_SETUP.md)** | Configuração de NSG no Azure (somente sem Cloudflare Tunnel) | 🌩️ DevOps Azure |
@@ -47,9 +51,13 @@ Guia completo de toda a documentação disponível neste projeto.
 
 | Script | Plataforma | Descrição |
 |--------|-----------|-----------|
+| **[install.sh](install.sh)** | Linux | 🆕 **Script de instalação master 100% automatizado** - Orquestra toda a instalação |
+| **[install.config.example](install.config.example)** | Linux | 🆕 Template de configuração para install.sh (deploy repetível) |
+| **[validate-installation.sh](validate-installation.sh)** | Linux | 🆕 **Validação completa da instalação** - 40+ testes automatizados |
 | **[configure-cloudflare.sh](configure-cloudflare.sh)** | Linux | Instalação automatizada do Cloudflare Tunnel |
-| **[quick-start.sh](quick-start.sh)** | Linux/Mac | Script automatizado de inicialização |
-| **[quick-start.ps1](quick-start.ps1)** | Windows | Script automatizado de inicialização |
+| **[fix-sso-config.sh](fix-sso-config.sh)** | Linux | Corrigir configuração de SSO (Azure Entra ID) |
+| **[quick-start.sh](quick-start.sh)** | Linux/Mac | Script automatizado de inicialização (legado) |
+| **[quick-start.ps1](quick-start.ps1)** | Windows | Script automatizado de inicialização (legado) |
 | **[generate_secrets.py](generate_secrets.py)** | Todos | Gerador de chaves de segurança |
 | **[Makefile](Makefile)** | Linux/Mac | Comandos úteis (make up, make logs, etc) |
 

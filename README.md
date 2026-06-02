@@ -94,7 +94,7 @@ superset_airflow_env/
 
 ## 🚀 Guia de Inicialização
 
-> 💡 **Instalação do Zero?** Para instalação completa em Ubuntu limpo com Cloudflare Tunnel, siga o **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - guia passo a passo de 60 minutos.
+> 💡 **Instalação do Zero?** Para instalação completa em Ubuntu limpo com Cloudflare Tunnel, siga o **[AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)** - instalação automatizada em 15-20 minutos.
 
 ### Pré-requisitos
 
@@ -105,12 +105,45 @@ superset_airflow_env/
 - **Cloudflare Tunnel** configurado (opcional mas recomendado)
 
 > 📘 **Instalando em Ubuntu Server do Zero?**  
-> Consulte o guia completo: [UBUNTU_SETUP.md](UBUNTU_SETUP.md) - inclui instalação do Docker, configuração de permissões e setup completo passo a passo.
+> **NOVO!** Instalação 100% automatizada: [AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md) - 15-20 minutos  
+> Ou manual passo a passo: [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) - 60-80 minutos
 
 > ☁️ **Configurando Cloudflare Tunnel?**  
 > Consulte: [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) - acesso seguro sem expor portas públicas.
 
-### Passo 1: Clonar o Repositório
+### 🎯 Três Formas de Instalar:
+
+#### 1️⃣ Instalação Automatizada (Recomendado) ⚡
+
+```bash
+git clone <url-repositorio> data-platform
+cd data-platform
+chmod +x install.sh
+
+# Modo totalmente automático
+./install.sh --auto
+
+# OU com arquivo de configuração
+cp install.config.example install.config
+nano install.config  # Edite com seus valores
+./install.sh --config install.config
+```
+
+**Tempo:** 15-20 minutos  
+**Guia completo:** [AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)
+
+#### 2️⃣ Instalação Manual Guiada
+
+Siga o guia passo a passo completo:  
+**[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - 60-80 minutos
+
+#### 3️⃣ Início Rápido (Docker já instalado)
+
+**[QUICKSTART.md](QUICKSTART.md)** - 5 minutos
+
+---
+
+### Passo 1 (Manual): Clonar o Repositório
 
 ```bash
 git clone <url-do-repositorio>

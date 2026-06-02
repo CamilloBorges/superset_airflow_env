@@ -1,4 +1,18 @@
-# ⚡ Início Rápido - 5 Minutos
+# ⚡ Início Rápido
+
+**Escolha o método ideal para sua situação:**
+
+| Situação | Método | Tempo | Guia |
+|----------|--------|-------|------|
+| 🆕 **Servidor Ubuntu limpo** | **Instalação Automatizada** ⚡ | **15-20 min** | **[AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)** |
+| 🖥️ Servidor Ubuntu limpo (manual) | Passo a Passo Manual | 60-80 min | [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) |
+| ✅ Docker já instalado | Início Rápido | 5 min | Este guia |
+
+> 💡 **NOVO!** Script de instalação 100% automatizado disponível - recomendado para novos deployments.
+
+---
+
+## 🎯 Se Docker JÁ está Instalado (5 minutos)
 
 Guia super rápido para quem tem pressa e já conhece Docker.
 
