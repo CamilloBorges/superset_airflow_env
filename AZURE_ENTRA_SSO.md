@@ -551,6 +551,10 @@ Você deve ver o usuário criado com email do Azure AD.
 
 ## 🔧 Troubleshooting
 
+> 🚨 **Usuários não sendo criados após login?**  
+> Consulte o guia completo: **[SSO_TROUBLESHOOTING.md](SSO_TROUBLESHOOTING.md)**  
+> Ou execute no servidor: `./fix-sso-config.sh`
+
 ### Erro: "Redirect URI mismatch"
 
 **Causa:** URI de redirecionamento não corresponde ao configurado no Azure.

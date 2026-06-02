@@ -104,7 +104,7 @@ Docker Compose (13 containers)
 
 ### Informações Necessárias
 
-- [ ] IP público do servidor: `172.174.210.23`
+- [ ] IP público do servidor: `48.217.186.142`
 - [ ] Usuário SSH: `azureuser`
 - [ ] Domínio: `bi.bomgado.com.br`
 
@@ -116,10 +116,10 @@ Docker Compose (13 containers)
 
 ```bash
 # Windows (PowerShell)
-ssh -i C:\Users\camil\.ssh\azuer_teste.pem azureuser@172.174.210.23
+ssh -i C:\Users\camil\.ssh\azuer_teste.pem azureuser@48.217.186.142
 
 # Linux/Mac
-ssh -i ~/.ssh/azuer_teste.pem azureuser@172.174.210.23
+ssh -i ~/.ssh/azuer_teste.pem azureuser@48.217.186.142
 ```
 
 ### Passo 1.2: Atualizar Sistema
