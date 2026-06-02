@@ -922,14 +922,15 @@ EOF
     
     create_env_file
     create_directory_structure
+    
+    if [ "$SETUP_AZURE_SSO" = "yes" ]; then
+        setup_azure_sso_config
+    fi
+    
     configure_permissions
     
     if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
         setup_cloudflare_tunnel || true
-    fi
-    
-    if [ "$SETUP_AZURE_SSO" = "yes" ]; then
-        setup_azure_sso_config
     fi
     
     deploy_platform
