@@ -20,6 +20,18 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 ENABLE_PROXY_FIX = True
 PREFERRED_URL_SCHEME = 'https'
 
+# Configurar ProxyFix para confiar nos headers do nginx
+def FLASK_APP_MUTATOR(app):
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,
+        x_proto=1,
+        x_host=1,
+        x_port=1,
+        x_prefix=1
+    )
+
 AUTH_TYPE = AUTH_OAUTH
 
 OAUTH_PROVIDERS = [
