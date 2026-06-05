@@ -16,6 +16,10 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 # CONFIGURAÇÕES DE SSO - AZURE ENTRA ID
 # =============================================================================
 
+# Habilitar proxy fix para HTTPS atrás do Cloudflare Tunnel
+ENABLE_PROXY_FIX = True
+PREFERRED_URL_SCHEME = 'https'
+
 AUTH_TYPE = AUTH_OAUTH
 
 OAUTH_PROVIDERS = [
