@@ -20,7 +20,13 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 ENABLE_PROXY_FIX = True
 PREFERRED_URL_SCHEME = 'https'
 
-# Configurar ProxyFix para confiar nos headers do nginx
+# Configurar domínio para cookies de sessão
+PUBLIC_ROLE_LIKE = "Gamma"
+WTF_CSRF_ENABLED = True
+WTF_CSRF_EXEMPT_LIST = []
+WTF_CSRF_TIME_LIMIT = None
+
+# Configurar ProxyFix e Session para OAuth state
 def FLASK_APP_MUTATOR(app):
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(
@@ -31,16 +37,18 @@ def FLASK_APP_MUTATOR(app):
         x_port=1,
         x_prefix=1
     )
-
-# Sessão Redis (necessário para OAuth state)
-SESSION_TYPE = 'redis'
-SESSION_REDIS_HOST = os.getenv('REDIS_HOST')
-SESSION_REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-SESSION_REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
-SESSION_REDIS_DB = 0
-SESSION_COOKIE_SECURE = True  # HTTPS only
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+    
+    # Configurar cookies de sessão para trabalhar com Cloudflare/nginx
+    # Temporariamente desabilitar SECURE para debugging
+    app.config['SESSION_COOKIE_SECURE'] = False  # FIXME: deveria ser True em produção
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_DOMAIN'] = None  # Não restringir domínio
+    app.config['SESSION_COOKIE_NAME'] = 'session'
+    app.config['PERMANENT_SESSION_LIFETIME'] = 43200  # 12 horas
+    app.config['REMEMBER_COOKIE_SECURE'] = False  # FIXME: deveria ser True em produção
+    app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
 AUTH_TYPE = AUTH_OAUTH
 
