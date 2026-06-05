@@ -61,6 +61,7 @@ class AzureSecurityManager(SupersetSecurityManager):
                 'email': me.get('mail') or me.get('userPrincipalName'),
                 'first_name': me.get('givenName', ''),
                 'last_name': me.get('surname', ''),
+                'role_keys': ['Gamma'],  # Atribuir role Gamma por padrão
             }
         return {}
 
