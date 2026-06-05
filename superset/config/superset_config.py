@@ -32,6 +32,16 @@ def FLASK_APP_MUTATOR(app):
         x_prefix=1
     )
 
+# Sessão Redis (necessário para OAuth state)
+SESSION_TYPE = 'redis'
+SESSION_REDIS_HOST = os.getenv('REDIS_HOST')
+SESSION_REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+SESSION_REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+SESSION_REDIS_DB = 0
+SESSION_COOKIE_SECURE = True  # HTTPS only
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 AUTH_TYPE = AUTH_OAUTH
 
 OAUTH_PROVIDERS = [
