@@ -10,6 +10,57 @@ Documentação: https://superset.apache.org/docs/configuration/configuring-super
 
 import os
 from celery.schedules import crontab
+from flask_appbuilder.security.manager import AUTH_OAUTH
+
+# =============================================================================
+# CONFIGURAÇÕES DE SSO - AZURE ENTRA ID
+# =============================================================================
+
+AUTH_TYPE = AUTH_OAUTH
+
+OAUTH_PROVIDERS = [
+    {
+        'name': 'azure',
+        'icon': 'fa-windows',
+        'token_key': 'access_token',
+        'remote_app': {
+            'client_id': os.getenv('AZURE_SUPERSET_CLIENT_ID'),
+            'client_secret': os.getenv('AZURE_SUPERSET_CLIENT_SECRET'),
+            'api_base_url': 'https://graph.microsoft.com/v1.0/',
+            'client_kwargs': {
+                'scope': 'openid email profile User.Read'
+            },
+            'access_token_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/token",
+            'authorize_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/authorize",
+            'server_metadata_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/v2.0/.well-known/openid-configuration",
+        }
+    }
+]
+
+AUTH_USER_REGISTRATION = True
+AUTH_USER_REGISTRATION_ROLE = "Gamma"
+
+from superset.security import SupersetSecurityManager
+
+class AzureSecurityManager(SupersetSecurityManager):
+    def oauth_user_info(self, provider, response=None):
+        if provider == 'azure':
+            import requests
+            access_token = response.get('access_token')
+            me = requests.get(
+                'https://graph.microsoft.com/v1.0/me',
+                headers={'Authorization': f'Bearer {access_token}'}
+            ).json()
+            return {
+                'username': me.get('userPrincipalName', '').split('@')[0],
+                'name': me.get('displayName', ''),
+                'email': me.get('mail') or me.get('userPrincipalName'),
+                'first_name': me.get('givenName', ''),
+                'last_name': me.get('surname', ''),
+            }
+        return {}
+
+CUSTOM_SECURITY_MANAGER = AzureSecurityManager
 
 # =============================================================================
 # CONFIGURAÇÕES DE BANCO DE DADOS
