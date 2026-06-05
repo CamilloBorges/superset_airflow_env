@@ -20,11 +20,25 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 ENABLE_PROXY_FIX = True
 PREFERRED_URL_SCHEME = 'https'
 
-# Configurar domínio para cookies de sessão
-PUBLIC_ROLE_LIKE = "Gamma"
+# IMPORTANTE: Remover PUBLIC_ROLE_LIKE para forçar autenticação
+# Se definido como "Gamma", permite acesso sem login (páginas sem proteção)
+# PUBLIC_ROLE_LIKE = "Gamma"  # REMOVIDO - forçar autenticação obrigatória
+
 WTF_CSRF_ENABLED = True
 WTF_CSRF_EXEMPT_LIST = []
 WTF_CSRF_TIME_LIMIT = None
+
+# =============================================================================
+# SESSÃO NO REDIS - CRÍTICO PARA OAUTH FUNCIONAR
+# =============================================================================
+# Flask precisa de sessão persistente (Redis) para armazenar OAuth state
+# Sessão em memória (padrão) perde o state entre requests, causando CSRF error
+
+SESSION_TYPE = 'redis'
+SESSION_REDIS = f"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
+SESSION_USE_SIGNER = True
+SESSION_PERMANENT = False
+PERMANENT_SESSION_LIFETIME = 43200  # 12 horas
 
 # Configurar ProxyFix e Session para OAuth state
 def FLASK_APP_MUTATOR(app):
@@ -44,8 +58,7 @@ def FLASK_APP_MUTATOR(app):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['SESSION_COOKIE_DOMAIN'] = None  # Não restringir domínio
-    app.config['SESSION_COOKIE_NAME'] = 'session'
-    app.config['PERMANENT_SESSION_LIFETIME'] = 43200  # 12 horas
+    app.config['SESSION_COOKIE_NAME'] = 'superset_session'
     app.config['REMEMBER_COOKIE_SECURE'] = False  # FIXME: deveria ser True em produção
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
