@@ -17,11 +17,11 @@ from celery.schedules import crontab
 
 # String de conexão com PostgreSQL
 SQLALCHEMY_DATABASE_URI = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:"
-    f"{os.getenv('POSTGRES_PASSWORD')}@"
-    f"{os.getenv('POSTGRES_HOST')}:"
-    f"{os.getenv('POSTGRES_PORT')}/"
-    f"{os.getenv('POSTGRES_SUPERSET_DB')}"
+    f"postgresql://{os.getenv('DATABASE_USER')}:"
+    f"{os.getenv('DATABASE_PASSWORD')}@"
+    f"{os.getenv('DATABASE_HOST')}:"
+    f"{os.getenv('DATABASE_PORT')}/"
+    f"{os.getenv('DATABASE_DB')}"
 )
 
 # =============================================================================
