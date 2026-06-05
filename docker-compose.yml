@@ -371,8 +371,9 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nginx-proxy
-    # Cloudflare Tunnel se conecta via rede interna - não precisa expor portas
-    # Para acesso local direto, use: airflow-webserver:8080, superset:8088, hop-server:8081
+    ports:
+      - "80:80"       # Superset - Cloudflare Tunnel connects to localhost:80
+      # Note: Ports 8080 (Airflow) and 8081 (Hop) exposed directly by respective containers
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
