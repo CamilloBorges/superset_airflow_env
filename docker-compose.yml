@@ -194,7 +194,10 @@ services:
   # SUPERSET - Inicialização
   # =============================================================================
   superset-init:
-    image: apache/superset:3.0.0
+    build:
+      context: ./superset
+      dockerfile: Dockerfile
+    image: superset-custom:latest
     container_name: superset-init
     environment:
       DATABASE_DIALECT: postgresql
@@ -234,7 +237,7 @@ services:
   # SUPERSET - Webserver
   # =============================================================================
   superset:
-    image: apache/superset:3.0.0
+    image: superset-custom:latest
     container_name: superset
     environment:
       DATABASE_DIALECT: postgresql
@@ -274,7 +277,7 @@ services:
   # SUPERSET - Celery Worker (para relatórios agendados)
   # =============================================================================
   superset-worker:
-    image: apache/superset:3.0.0
+    image: superset-custom:latest
     container_name: superset-worker
     command: celery --app=superset.tasks.celery_app:app worker --pool=prefork -O fair -c 4
     environment:
@@ -313,7 +316,7 @@ services:
   # SUPERSET - Celery Beat (agendador de tarefas)
   # =============================================================================
   superset-beat:
-    image: apache/superset:3.0.0
+    image: superset-custom:latest
     container_name: superset-beat
     command: celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule
     environment:
