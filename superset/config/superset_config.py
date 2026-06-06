@@ -160,11 +160,11 @@ CUSTOM_SECURITY_MANAGER = AzureSecurityManager
 
 # PostgreSQL como metadata database
 SQLALCHEMY_DATABASE_URI = (
-    f"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:"
-    f"{os.getenv('POSTGRES_PASSWORD')}@"
-    f"{os.getenv('POSTGRES_HOST')}:"
-    f"{os.getenv('POSTGRES_PORT')}/"
-    f"{os.getenv('POSTGRES_DB', 'superset_db')}"
+    f"postgresql+psycopg2://{os.getenv('DATABASE_USER', os.getenv('POSTGRES_USER'))}:"
+    f"{os.getenv('DATABASE_PASSWORD', os.getenv('POSTGRES_PASSWORD_URLENCODED', os.getenv('POSTGRES_PASSWORD')))}@"
+    f"{os.getenv('DATABASE_HOST', os.getenv('POSTGRES_HOST'))}:"
+    f"{os.getenv('DATABASE_PORT', os.getenv('POSTGRES_PORT', '5432'))}/"
+    f"{os.getenv('DATABASE_DB', os.getenv('POSTGRES_SUPERSET_DB', 'superset_db'))}"
 )
 
 # Configurações de pool de conexões

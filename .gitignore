@@ -3,6 +3,11 @@
 *.env
 !.env.example
 
+# Azure Key Vault - Backups e credenciais locais
+.env.backup*
+.azure/
+azure-credentials.json
+
 # Arquivos de configuração com secrets (não commitados)
 airflow/config/webserver_config.py
 superset/config/superset_config.py

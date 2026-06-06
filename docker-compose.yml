@@ -1,12 +1,10 @@
-version: '3.8'
-
 x-airflow-common: &airflow-common
   image: apache/airflow:2.8.0-python3.11
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_AIRFLOW_DB}
     AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
@@ -15,7 +13,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: ${AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: ${AIRFLOW__WEBSERVER__EXPOSE_CONFIG}
-    AIRFLOW__WEBSERVER__CONFIG_FILE: /opt/airflow/config/webserver_config.py
+    # AIRFLOW__WEBSERVER__CONFIG_FILE: /opt/airflow/config/webserver_config.py  # Desabilitado temporariamente
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW_UID: ${AIRFLOW_UID}
     AZURE_AIRFLOW_CLIENT_ID: ${AZURE_AIRFLOW_CLIENT_ID}
@@ -87,13 +85,7 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: airflow-init
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
-        chown -R "${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins}
-        exec /entrypoint airflow version
+    command: version
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -202,7 +194,7 @@ services:
     environment:
       DATABASE_DIALECT: postgresql
       DATABASE_USER: ${POSTGRES_USER}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD_URLENCODED}
       DATABASE_HOST: ${POSTGRES_HOST}
       DATABASE_PORT: ${POSTGRES_PORT}
       DATABASE_DB: ${POSTGRES_SUPERSET_DB}
@@ -242,7 +234,7 @@ services:
     environment:
       DATABASE_DIALECT: postgresql
       DATABASE_USER: ${POSTGRES_USER}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD_URLENCODED}
       DATABASE_HOST: ${POSTGRES_HOST}
       DATABASE_PORT: ${POSTGRES_PORT}
       DATABASE_DB: ${POSTGRES_SUPERSET_DB}
@@ -283,7 +275,7 @@ services:
     environment:
       DATABASE_DIALECT: postgresql
       DATABASE_USER: ${POSTGRES_USER}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD_URLENCODED}
       DATABASE_HOST: ${POSTGRES_HOST}
       DATABASE_PORT: ${POSTGRES_PORT}
       DATABASE_DB: ${POSTGRES_SUPERSET_DB}
@@ -322,7 +314,7 @@ services:
     environment:
       DATABASE_DIALECT: postgresql
       DATABASE_USER: ${POSTGRES_USER}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD_URLENCODED}
       DATABASE_HOST: ${POSTGRES_HOST}
       DATABASE_PORT: ${POSTGRES_PORT}
       DATABASE_DB: ${POSTGRES_SUPERSET_DB}
