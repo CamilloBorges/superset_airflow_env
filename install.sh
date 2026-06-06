@@ -1,947 +1,368 @@
 #!/bin/bash
-# install.sh - Script de Instalação Automatizada Completa
-# ===========================================================
-# Instala e configura toda a plataforma de dados do zero
+#
+# install.sh - Instalação Automatizada - Plataforma de Dados Enterprise
+# ========================================================================
+#
+# Instala e configura:
+#   - Docker e Docker Compose
+#   - Cloudflare Tunnel
+#   - Apache Superset 6.1.0
+#   - Apache Airflow 2.8.0
+#   - Apache Hop 2.7.0
+#   - PostgreSQL 15 + Redis 7
+#   - Nginx reverse proxy
 #
 # Uso:
-#   ./install.sh                          # Modo interativo
-#   ./install.sh --auto                   # Modo totalmente automático
-#   ./install.sh --config install.config  # Usando arquivo de configuração
-#   ./install.sh --help                   # Ajuda
+#   ./install.sh
 #
-# IMPORTANTE - Permissões:
-#   - NÃO execute este script com sudo
-#   - Execute como usuário normal (o script pedirá sudo quando necessário)
-#   - O script usa 'sudo docker' automaticamente durante instalação
-#   - Após logout/login, não precisará mais de sudo para Docker
+# Pré-requisitos:
+#   - Ubuntu 24.04 ou 22.04
+#   - Usuário com sudo
+#   - Arquivo .env configurado com credenciais Azure
+#   - Token Cloudflare Tunnel pronto
 #
-# ===========================================================
+# ========================================================================
 
 set -e  # Exit on error
 
-# =============================================================================
-# CORES E FORMATAÇÃO
-# =============================================================================
-
+# Cores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-GRAY='\033[0;90m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Símbolos
 CHECK="${GREEN}✓${NC}"
 CROSS="${RED}✗${NC}"
 ARROW="${CYAN}→${NC}"
-WARN="${YELLOW}⚠${NC}"
 INFO="${BLUE}ℹ${NC}"
-ROCKET="${PURPLE}🚀${NC}"
 
-# =============================================================================
-# VARIÁVEIS GLOBAIS
-# =============================================================================
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="$SCRIPT_DIR/install.log"
-CONFIG_FILE=""
-INSTALL_MODE="interactive"
-AUTO_MODE=false
-
-# Valores padrão
-PUBLIC_DOMAIN="bi.bomgado.com.br"
-TIMEZONE="America/Sao_Paulo"
-INSTALL_DOCKER="yes"
-CONFIGURE_DOCKER_PERMISSIONS="yes"
-SETUP_CLOUDFLARE="yes"
-CLOUDFLARE_TUNNEL_TOKEN=""
-AUTO_GENERATE_SECRETS="yes"
-SETUP_SSL="skip"
-SETUP_AZURE_SSO="no"
-RUN_TESTS="yes"
-STARTUP_WAIT_TIME=120
-CREATE_BACKUP="no"
-USE_SUDO_DOCKER=false
-
-# =============================================================================
+# ========================================================================
 # FUNÇÕES AUXILIARES
-# =============================================================================
+# ========================================================================
 
-log() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $*" | tee -a "$LOG_FILE"
-}
-
-# Função para executar comandos docker com sudo se necessário
-docker_cmd() {
-    if [ "$USE_SUDO_DOCKER" = true ]; then
-        sudo docker "$@"
-    else
-        docker "$@"
-    fi
-}
-
-docker_compose_cmd() {
-    if [ "$USE_SUDO_DOCKER" = true ]; then
-        sudo docker compose "$@"
-    else
-        docker compose "$@"
-    fi
-}
-
-print_header() {
-    echo ""
-    echo -e "${WHITE}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${WHITE}  $1${NC}"
-    echo -e "${WHITE}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-    log "=== $1 ==="
-}
-
-print_step() {
-    echo -e "${CYAN}${ARROW} $1${NC}"
-    log "STEP: $1"
-}
-
-print_success() {
-    echo -e "${CHECK} $1"
-    log "SUCCESS: $1"
-}
-
-print_error() {
-    echo -e "${CROSS} $1" >&2
-    log "ERROR: $1"
-}
-
-print_warning() {
-    echo -e "${WARN} $1"
-    log "WARNING: $1"
-}
-
-print_info() {
+log_info() {
     echo -e "${INFO} $1"
-    log "INFO: $1"
 }
 
-confirm() {
-    if [ "$AUTO_MODE" = true ]; then
-        return 0
-    fi
-    
-    local message="$1"
-    local default="${2:-n}"
-    
-    if [ "$default" = "y" ]; then
-        read -p "$message (Y/n): " -n 1 -r
-    else
-        read -p "$message (y/N): " -n 1 -r
-    fi
-    echo
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+log_success() {
+    echo -e "${CHECK} $1"
 }
 
-check_root() {
-    if [ "$EUID" -eq 0 ]; then
-        print_error "Não execute este script como root!"
-        print_info "Execute como usuário normal. O script pedirá sudo quando necessário."
-        exit 1
-    fi
+log_error() {
+    echo -e "${CROSS} $1"
 }
 
-check_os() {
-    print_step "Detectando sistema operacional..."
-    
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        OS_VERSION=$VERSION_ID
-        print_success "Sistema detectado: $NAME $VERSION_ID"
-    else
-        print_error "Sistema operacional não suportado!"
+log_step() {
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}========================================${NC}"
+}
+
+check_ubuntu() {
+    if [ ! -f /etc/os-release ]; then
+        log_error "Sistema operacional não identificado"
         exit 1
     fi
     
-    if [ "$OS" != "ubuntu" ] && [ "$OS" != "debian" ]; then
-        print_warning "Este script foi testado em Ubuntu/Debian"
-        if ! confirm "Deseja continuar mesmo assim?"; then
-            exit 1
-        fi
-    fi
-}
-
-# =============================================================================
-# FUNÇÕES DE CONFIGURAÇÃO
-# =============================================================================
-
-load_config() {
-    if [ -f "$CONFIG_FILE" ]; then
-        print_step "Carregando configuração de $CONFIG_FILE..."
-        
-        # Corrigir quebras de linha Windows (CRLF → LF) se necessário
-        if file "$CONFIG_FILE" 2>/dev/null | grep -q "CRLF"; then
-            sed -i 's/\r$//' "$CONFIG_FILE" 2>/dev/null || true
-        fi
-        
-        # Source do arquivo de configuração
-        set -a  # Auto export variables
-        source "$CONFIG_FILE"
-        set +a
-        
-        print_success "Configuração carregada!"
-    else
-        print_warning "Arquivo de configuração não encontrado: $CONFIG_FILE"
-        print_info "Usando valores padrão e modo interativo"
-    fi
-}
-
-create_config_interactive() {
-    print_header "Configuração Interativa"
+    . /etc/os-release
     
-    echo -e "${CYAN}Vamos configurar sua instalação...${NC}"
-    echo ""
-    
-    # Domínio
-    read -p "Domínio público (ex: bi.bomgado.com.br): " -i "$PUBLIC_DOMAIN" -e PUBLIC_DOMAIN
-    
-    # Cloudflare
-    if confirm "Configurar Cloudflare Tunnel?" "y"; then
-        SETUP_CLOUDFLARE="yes"
-        echo ""
-        print_info "Para obter o token:"
-        echo "  1. Acesse https://dash.cloudflare.com"
-        echo "  2. Zero Trust → Tunnels → Create tunnel"
-        echo "  3. Copie o token"
-        echo ""
-        read -p "Token do Cloudflare Tunnel (deixe vazio para configurar depois): " CLOUDFLARE_TUNNEL_TOKEN
-    else
-        SETUP_CLOUDFLARE="no"
+    if [[ "$ID" != "ubuntu" ]]; then
+        log_error "Este script é para Ubuntu. Detectado: $ID"
+        exit 1
     fi
     
-    # Azure SSO
-    if confirm "Configurar Azure Entra SSO?"; then
-        SETUP_AZURE_SSO="yes"
-        read -p "Azure Tenant ID: " AZURE_TENANT_ID
-        read -p "Superset Client ID: " AZURE_SUPERSET_CLIENT_ID
-        read -sp "Superset Client Secret: " AZURE_SUPERSET_CLIENT_SECRET
-        echo ""
-        read -p "Airflow Client ID: " AZURE_AIRFLOW_CLIENT_ID
-        read -sp "Airflow Client Secret: " AZURE_AIRFLOW_CLIENT_SECRET
-        echo ""
-    else
-        SETUP_AZURE_SSO="no"
+    if [[ ! "$VERSION_ID" =~ ^(24.04|22.04|20.04)$ ]]; then
+        log_error "Versão do Ubuntu não suportada: $VERSION_ID"
+        log_info "Versões suportadas: 24.04, 22.04, 20.04"
+        exit 1
     fi
     
-    echo ""
-    print_success "Configuração completa!"
+    log_success "Ubuntu $VERSION_ID detectado"
 }
 
-# =============================================================================
-# INSTALAÇÃO DE DEPENDÊNCIAS
-# =============================================================================
-
-install_dependencies() {
-    print_header "Instalando Dependências do Sistema"
-    
-    print_step "Atualizando lista de pacotes..."
-    sudo apt update -qq
-    
-    print_step "Instalando ferramentas essenciais..."
-    sudo apt install -y \
-        curl \
-        wget \
-        git \
-        vim \
-        nano \
-        htop \
-        net-tools \
-        ca-certificates \
-        gnupg \
-        lsb-release \
-        python3 \
-        python3-pip \
-        jq \
-        > /dev/null 2>&1
-    
-    print_success "Dependências instaladas!"
+check_sudo() {
+    if ! sudo -n true 2>/dev/null; then
+        log_error "Este script precisa de permissões sudo"
+        log_info "Execute: sudo -v"
+        exit 1
+    fi
+    log_success "Permissões sudo verificadas"
 }
 
-configure_timezone() {
-    print_header "Configurando Timezone"
+check_env_file() {
+    if [ ! -f .env ]; then
+        log_error "Arquivo .env não encontrado"
+        log_info "Execute: cp .env.example .env"
+        log_info "Depois edite .env com suas credenciais Azure"
+        exit 1
+    fi
     
-    print_step "Configurando timezone para $TIMEZONE..."
-    sudo timedatectl set-timezone "$TIMEZONE"
+    # Verificar se variáveis Azure estão configuradas
+    source .env
     
-    local current_tz=$(timedatectl | grep "Time zone" | awk '{print $3}')
-    print_success "Timezone configurado: $current_tz"
+    if [ -z "$AZURE_TENANT_ID" ] || [ "$AZURE_TENANT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
+        log_error "AZURE_TENANT_ID não configurado no .env"
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_SUPERSET_CLIENT_ID" ] || [ "$AZURE_SUPERSET_CLIENT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
+        log_error "AZURE_SUPERSET_CLIENT_ID não configurado no .env"
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_SUPERSET_CLIENT_SECRET" ] || [ "$AZURE_SUPERSET_CLIENT_SECRET" == "<OBTER_DO_AZURE_PORTAL>" ]; then
+        log_error "AZURE_SUPERSET_CLIENT_SECRET não configurado no .env"
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_AIRFLOW_CLIENT_ID" ] || [ "$AZURE_AIRFLOW_CLIENT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
+        log_error "AZURE_AIRFLOW_CLIENT_ID não configurado no .env"
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_AIRFLOW_CLIENT_SECRET" ] || [ "$AZURE_AIRFLOW_CLIENT_SECRET" == "<OBTER_DO_AZURE_PORTAL>" ]; then
+        log_error "AZURE_AIRFLOW_CLIENT_SECRET não configurado no .env"
+        exit 1
+    fi
+    
+    log_success "Arquivo .env configurado corretamente"
 }
 
-# =============================================================================
-# INSTALAÇÃO DO DOCKER
-# =============================================================================
+# ========================================================================
+# INSTALAÇÃO
+# ========================================================================
 
 install_docker() {
-    print_header "Instalando Docker"
+    log_step "PASSO 1: Instalando Docker"
     
     if command -v docker &> /dev/null; then
-        local docker_version=$(docker --version)
-        print_success "Docker já instalado: $docker_version"
-        
-        # Verificar se usuário já tem permissões Docker
-        if docker ps &> /dev/null; then
-            print_success "Usuário já tem permissões Docker"
-            USE_SUDO_DOCKER=false
-        else
-            print_info "Usuário não tem permissões Docker ainda"
-            USE_SUDO_DOCKER=true
-        fi
-        return 0
+        log_info "Docker já instalado: $(docker --version)"
+        return
     fi
     
-    print_step "Removendo versões antigas..."
-    sudo apt remove -y docker docker-engine docker.io containerd runc > /dev/null 2>&1 || true
+    log_info "Atualizando repositórios..."
+    sudo apt-get update -qq
     
-    print_step "Adicionando repositório oficial do Docker..."
-    sudo mkdir -p /etc/apt/keyrings
+    log_info "Instalando dependências..."
+    sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+    
+    log_info "Adicionando chave GPG do Docker..."
+    sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
     
+    log_info "Adicionando repositório Docker..."
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      $(lsb_release -cs) stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     
-    print_step "Instalando Docker Engine..."
-    sudo apt update -qq
-    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
+    log_info "Instalando Docker Engine..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     
-    print_step "Habilitando Docker no boot..."
-    sudo systemctl enable docker
-    sudo systemctl enable containerd
-    
-    local docker_version=$(docker --version)
-    local compose_version=$(docker compose version)
-    
-    print_success "Docker instalado: $docker_version"
-    print_success "Docker Compose instalado: $compose_version"
-}
-
-configure_docker_permissions() {
-    print_header "Configurando Permissões Docker"
-    
-    print_step "Adicionando usuário ao grupo docker..."
+    log_info "Adicionando usuário ao grupo docker..."
     sudo usermod -aG docker $USER
     
-    print_success "Usuário $USER adicionado ao grupo docker"
-    print_info "Usando 'sudo docker' durante instalação (permissões aplicadas após logout/login)"
-    
-    # Marcar que precisamos usar sudo docker
-    USE_SUDO_DOCKER=true
+    log_success "Docker instalado: $(docker --version)"
+    log_info "IMPORTANTE: Será necessário fazer logout/login para usar docker sem sudo"
 }
 
-# =============================================================================
-# GERAÇÃO DE SECRETS
-# =============================================================================
-
-generate_secrets() {
-    print_header "Gerando Secrets de Segurança"
+install_cloudflare_tunnel() {
+    log_step "PASSO 2: Instalando Cloudflare Tunnel"
     
-    print_step "Gerando Postgres password..."
-    POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
-    
-    print_step "Gerando Redis password..."
-    REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
-    
-    print_step "Gerando Airflow Fernet Key..."
-    AIRFLOW__CORE__FERNET_KEY=$(docker_cmd run --rm python:3.11-slim sh -c "pip install -q cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'")
-    
-    print_step "Gerando Airflow Webserver Secret Key..."
-    AIRFLOW__WEBSERVER__SECRET_KEY=$(openssl rand -base64 50 | tr -d '\n' | tr -d "=+/")
-    
-    print_step "Gerando Superset Secret Key..."
-    SUPERSET_SECRET_KEY=$(openssl rand -base64 50 | tr -d '\n' | tr -d "=+/")
-    
-    print_success "Todos os secrets gerados!"
-}
-
-create_env_file() {
-    print_header "Criando Arquivo .env"
-    
-    if [ -f ".env" ]; then
-        if ! confirm "Arquivo .env já existe. Sobrescrever?"; then
-            print_warning "Mantendo .env existente"
-            return 0
-        fi
-        
-        if [ "$CREATE_BACKUP" = "yes" ]; then
-            local backup_file=".env.backup.$(date +%Y%m%d_%H%M%S)"
-            cp .env "$backup_file"
-            print_info "Backup criado: $backup_file"
-        fi
+    if command -v cloudflared &> /dev/null; then
+        log_info "Cloudflare Tunnel já instalado: $(cloudflared --version)"
+        return
     fi
     
-    print_step "Criando .env a partir do template..."
-    cp .env.example .env
+    log_info "Baixando cloudflared..."
+    wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
     
-    print_step "Atualizando valores..."
+    log_info "Instalando cloudflared..."
+    sudo dpkg -i cloudflared-linux-amd64.deb
     
-    # Usar @ como delimitador no sed para evitar problemas com caracteres especiais
-    # Escapar & que tem significado especial no sed
-    POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed 's/[&/\]/\\&/g')
-    REDIS_PASSWORD_ESCAPED=$(echo "$REDIS_PASSWORD" | sed 's/[&/\]/\\&/g')
-    AIRFLOW__CORE__FERNET_KEY_ESCAPED=$(echo "$AIRFLOW__CORE__FERNET_KEY" | sed 's/[&/\]/\\&/g')
-    AIRFLOW__WEBSERVER__SECRET_KEY_ESCAPED=$(echo "$AIRFLOW__WEBSERVER__SECRET_KEY" | sed 's/[&/\]/\\&/g')
-    SUPERSET_SECRET_KEY_ESCAPED=$(echo "$SUPERSET_SECRET_KEY" | sed 's/[&/\]/\\&/g')
+    log_info "Limpando arquivo de instalação..."
+    rm -f cloudflared-linux-amd64.deb
     
-    # Substituir valores no .env usando @ como delimitador
-    sed -i "s@^PUBLIC_DOMAIN=.*@PUBLIC_DOMAIN=$PUBLIC_DOMAIN@" .env
-    sed -i "s@^TIMEZONE=.*@TIMEZONE=$TIMEZONE@" .env
-    sed -i "s@^POSTGRES_PASSWORD=.*@POSTGRES_PASSWORD=$POSTGRES_PASSWORD_ESCAPED@" .env
-    sed -i "s@^REDIS_PASSWORD=.*@REDIS_PASSWORD=$REDIS_PASSWORD_ESCAPED@" .env
-    sed -i "s@^AIRFLOW__CORE__FERNET_KEY=.*@AIRFLOW__CORE__FERNET_KEY=$AIRFLOW__CORE__FERNET_KEY_ESCAPED@" .env
-    sed -i "s@^AIRFLOW__WEBSERVER__SECRET_KEY=.*@AIRFLOW__WEBSERVER__SECRET_KEY=$AIRFLOW__WEBSERVER__SECRET_KEY_ESCAPED@" .env
-    sed -i "s@^SUPERSET_SECRET_KEY=.*@SUPERSET_SECRET_KEY=$SUPERSET_SECRET_KEY_ESCAPED@" .env
+    log_success "Cloudflare Tunnel instalado"
     
-    # Azure SSO (se configurado)
-    if [ "$SETUP_AZURE_SSO" = "yes" ]; then
-        AZURE_SUPERSET_CLIENT_SECRET_ESCAPED=$(echo "$AZURE_SUPERSET_CLIENT_SECRET" | sed 's/[&/\]/\\&/g')
-        AZURE_AIRFLOW_CLIENT_SECRET_ESCAPED=$(echo "$AZURE_AIRFLOW_CLIENT_SECRET" | sed 's/[&/\]/\\&/g')
-        
-        sed -i "s@^AZURE_TENANT_ID=.*@AZURE_TENANT_ID=$AZURE_TENANT_ID@" .env
-        sed -i "s@^AZURE_SUPERSET_CLIENT_ID=.*@AZURE_SUPERSET_CLIENT_ID=$AZURE_SUPERSET_CLIENT_ID@" .env
-        sed -i "s@^AZURE_SUPERSET_CLIENT_SECRET=.*@AZURE_SUPERSET_CLIENT_SECRET=$AZURE_SUPERSET_CLIENT_SECRET_ESCAPED@" .env
-        sed -i "s@^AZURE_AIRFLOW_CLIENT_ID=.*@AZURE_AIRFLOW_CLIENT_ID=$AZURE_AIRFLOW_CLIENT_ID@" .env
-        sed -i "s@^AZURE_AIRFLOW_CLIENT_SECRET=.*@AZURE_AIRFLOW_CLIENT_SECRET=$AZURE_AIRFLOW_CLIENT_SECRET_ESCAPED@" .env
+    # Configurar tunnel
+    echo ""
+    log_info "Configure o Cloudflare Tunnel agora:"
+    echo -e "${YELLOW}1. Acesse https://one.dash.cloudflare.com/${NC}"
+    echo -e "${YELLOW}2. Crie um Tunnel${NC}"
+    echo -e "${YELLOW}3. Copie o token de instalação${NC}"
+    echo ""
+    read -p "Cole o token do Cloudflare Tunnel: " CLOUDFLARE_TOKEN
+    
+    if [ -z "$CLOUDFLARE_TOKEN" ]; then
+        log_error "Token não fornecido. Você pode configurar depois com:"
+        log_info "sudo cloudflared service install <TOKEN>"
+        return
     fi
     
-    print_success "Arquivo .env criado e configurado!"
-}
-
-# =============================================================================
-# CLOUDFLARE TUNNEL
-# =============================================================================
-
-setup_cloudflare_tunnel() {
-    print_header "Configurando Cloudflare Tunnel"
+    log_info "Instalando serviço do tunnel..."
+    sudo cloudflared service install $CLOUDFLARE_TOKEN
     
-    # Verificar se cloudflared está instalado
-    if ! command -v cloudflared &> /dev/null; then
-        print_step "Instalando cloudflared..."
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-        sudo dpkg -i cloudflared-linux-amd64.deb
-        rm cloudflared-linux-amd64.deb
-        print_success "cloudflared instalado!"
-    else
-        print_success "cloudflared já instalado: $(cloudflared --version)"
-    fi
-    
-    # Verificar se tunnel já está rodando
-    if sudo systemctl is-active --quiet cloudflared; then
-        print_warning "Cloudflare Tunnel já está rodando!"
-        if ! confirm "Deseja reconfigurar?"; then
-            return 0
-        fi
-        sudo systemctl stop cloudflared
-        sudo cloudflared service uninstall 2>/dev/null || true
-    fi
-    
-    # Token
-    if [ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-        echo ""
-        print_info "Para obter o token do Cloudflare Tunnel:"
-        echo "  1. Acesse: https://dash.cloudflare.com"
-        echo "  2. Zero Trust → Tunnels → Create tunnel"
-        echo "  3. Nome: bi-bomgado-data-platform"
-        echo "  4. Copie o token"
-        echo ""
-        echo "  Configure Public Hostnames:"
-        echo "    - bi.bomgado.com.br → HTTP → localhost:80"
-        echo "    - airflow.bomgado.com.br → HTTP → localhost:8080"
-        echo "    - hop.bomgado.com.br → HTTP → localhost:8081"
-        echo ""
-        read -p "Cole o token aqui: " CLOUDFLARE_TUNNEL_TOKEN
-    fi
-    
-    if [ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-        print_error "Token não fornecido. Pulando configuração do Cloudflare Tunnel."
-        return 1
-    fi
-    
-    print_step "Instalando tunnel service..."
-    sudo cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN"
-    
-    print_step "Iniciando serviço..."
+    log_info "Iniciando cloudflared..."
     sudo systemctl start cloudflared
     sudo systemctl enable cloudflared
     
-    sleep 5
+    log_success "Cloudflare Tunnel configurado e ativo"
+}
+
+build_superset_image() {
+    log_step "PASSO 3: Build da Imagem Superset"
     
-    if sudo systemctl is-active --quiet cloudflared; then
-        print_success "Cloudflare Tunnel configurado e rodando!"
-        print_info "Verifique logs com: sudo journalctl -u cloudflared -f"
+    log_info "Construindo imagem customizada do Superset..."
+    docker compose build superset-init
+    
+    log_success "Imagem superset-custom:latest criada"
+}
+
+start_infrastructure() {
+    log_step "PASSO 4: Iniciando Infraestrutura Base"
+    
+    log_info "Iniciando PostgreSQL e Redis..."
+    docker compose up -d postgres redis
+    
+    log_info "Aguardando PostgreSQL ficar healthy (30s)..."
+    sleep 30
+    
+    # Verificar se PostgreSQL está saudável
+    if ! docker compose ps postgres | grep -q "healthy"; then
+        log_error "PostgreSQL não está healthy"
+        log_info "Verifique logs: docker compose logs postgres"
+        exit 1
+    fi
+    
+    log_success "PostgreSQL e Redis iniciados"
+}
+
+initialize_databases() {
+    log_step "PASSO 5: Inicializando Bancos de Dados"
+    
+    log_info "Executando migrations do Airflow e Superset..."
+    docker compose up -d airflow-init superset-init
+    
+    log_info "Aguardando migrations completarem (60s)..."
+    sleep 60
+    
+    # Verificar se init containers completaram
+    AIRFLOW_INIT_EXIT=$(docker compose ps airflow-init --format json | grep -o '"ExitCode":[0-9]*' | cut -d':' -f2)
+    SUPERSET_INIT_EXIT=$(docker compose ps superset-init --format json | grep -o '"ExitCode":[0-9]*' | cut -d':' -f2)
+    
+    if [ "$AIRFLOW_INIT_EXIT" != "0" ]; then
+        log_error "Airflow init falhou"
+        log_info "Logs: docker compose logs airflow-init"
     else
-        print_error "Falha ao iniciar Cloudflare Tunnel"
-        print_info "Verifique logs com: sudo journalctl -u cloudflared -n 50"
-        return 1
+        log_success "Airflow database inicializado"
+    fi
+    
+    if [ "$SUPERSET_INIT_EXIT" != "0" ]; then
+        log_error "Superset init falhou"
+        log_info "Logs: docker compose logs superset-init"
+    else
+        log_success "Superset database inicializado"
     fi
 }
 
-# =============================================================================
-# ESTRUTURA DE DIRETÓRIOS E PERMISSÕES
-# =============================================================================
-
-create_directory_structure() {
-    print_header "Criando Estrutura de Diretórios"
+start_all_services() {
+    log_step "PASSO 6: Iniciando Todos os Serviços"
     
-    print_step "Criando diretórios..."
-    mkdir -p airflow/{logs,dags,plugins,config}
-    mkdir -p superset/{config,data}
-    mkdir -p hop/{config,projects,metadata}
-    mkdir -p postgres/init-scripts
-    mkdir -p shared/data
-    mkdir -p nginx
+    log_info "Iniciando Airflow, Superset, Hop e Nginx..."
+    docker compose up -d
     
-    print_success "Estrutura de diretórios criada!"
+    log_info "Aguardando serviços ficarem healthy (30s)..."
+    sleep 30
+    
+    log_success "Todos os serviços iniciados"
 }
 
-configure_permissions() {
-    print_header "Configurando Permissões"
+show_status() {
+    log_step "STATUS DOS SERVIÇOS"
     
-    print_step "Configurando permissões do Airflow (UID 50000)..."
-    # Fazer chown primeiro para tomar ownership dos arquivos
-    sudo chown -R 50000:0 airflow/
-    
-    print_step "Ajustando permissões básicas..."
-    # Usar sudo para chmod pois os arquivos podem pertencer a outros usuários
-    sudo chmod -R 755 airflow superset hop postgres shared nginx 2>/dev/null || true
-    sudo chmod -R 777 airflow/logs 2>/dev/null || true
-    
-    print_step "Tornando scripts executáveis..."
-    chmod +x *.sh 2>/dev/null || true
-    chmod +x postgres/init-scripts/*.sh 2>/dev/null || true
-    
-    print_success "Permissões configuradas!"
+    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
 }
 
-# =============================================================================
-# CONFIGURAÇÃO DE SSO
-# =============================================================================
-
-setup_azure_sso_config() {
-    print_header "Configurando Azure Entra SSO"
-    
-    # Criar webserver_config.py para Airflow
-    print_step "Criando airflow/config/webserver_config.py..."
-    cat > airflow/config/webserver_config.py << 'AIRFLOW_EOF'
-from flask_appbuilder.security.manager import AUTH_OAUTH
-import os
-
-AUTH_TYPE = AUTH_OAUTH
-
-OAUTH_PROVIDERS = [
-    {
-        'name': 'azure',
-        'icon': 'fa-windows',
-        'token_key': 'access_token',
-        'remote_app': {
-            'client_id': os.getenv('AZURE_AIRFLOW_CLIENT_ID'),
-            'client_secret': os.getenv('AZURE_AIRFLOW_CLIENT_SECRET'),
-            'api_base_url': 'https://graph.microsoft.com/v1.0/',
-            'client_kwargs': {
-                'scope': 'openid email profile User.Read'
-            },
-            'access_token_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/token",
-            'authorize_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/authorize",
-            'server_metadata_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/v2.0/.well-known/openid-configuration",
-        }
-    }
-]
-
-AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Viewer"
-
-from airflow.www.security import AirflowSecurityManager
-
-class AzureSecurityManager(AirflowSecurityManager):
-    def oauth_user_info(self, provider, response=None):
-        if provider == 'azure':
-            import requests
-            access_token = response.get('access_token')
-            me = requests.get(
-                'https://graph.microsoft.com/v1.0/me',
-                headers={'Authorization': f'Bearer {access_token}'}
-            ).json()
-            return {
-                'username': me.get('userPrincipalName', '').split('@')[0],
-                'name': me.get('displayName', ''),
-                'email': me.get('mail') or me.get('userPrincipalName'),
-                'first_name': me.get('givenName', ''),
-                'last_name': me.get('surname', ''),
-                'role_keys': ['Viewer'],
-            }
-        return {}
-
-SECURITY_MANAGER_CLASS = AzureSecurityManager
-AIRFLOW_EOF
-    
-    # Criar superset_config.py para Superset
-    print_step "Criando superset/config/superset_config.py..."
-    cat > superset/config/superset_config.py << 'SUPERSET_EOF'
-from flask_appbuilder.security.manager import AUTH_OAUTH
-import os
-
-AUTH_TYPE = AUTH_OAUTH
-
-OAUTH_PROVIDERS = [
-    {
-        'name': 'azure',
-        'icon': 'fa-windows',
-        'token_key': 'access_token',
-        'remote_app': {
-            'client_id': os.getenv('AZURE_SUPERSET_CLIENT_ID'),
-            'client_secret': os.getenv('AZURE_SUPERSET_CLIENT_SECRET'),
-            'api_base_url': 'https://graph.microsoft.com/v1.0/',
-            'client_kwargs': {
-                'scope': 'openid email profile User.Read'
-            },
-            'access_token_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/token",
-            'authorize_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/authorize",
-            'server_metadata_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/v2.0/.well-known/openid-configuration",
-        }
-    }
-]
-
-AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Gamma"
-
-from superset.security import SupersetSecurityManager
-
-class AzureSecurityManager(SupersetSecurityManager):
-    def oauth_user_info(self, provider, response=None):
-        if provider == 'azure':
-            import requests
-            access_token = response.get('access_token')
-            me = requests.get(
-                'https://graph.microsoft.com/v1.0/me',
-                headers={'Authorization': f'Bearer {access_token}'}
-            ).json()
-            return {
-                'username': me.get('userPrincipalName', '').split('@')[0],
-                'name': me.get('displayName', ''),
-                'email': me.get('mail') or me.get('userPrincipalName'),
-                'first_name': me.get('givenName', ''),
-                'last_name': me.get('surname', ''),
-            }
-        return {}
-
-CUSTOM_SECURITY_MANAGER = AzureSecurityManager
-SUPERSET_EOF
-    
-    print_success "Arquivos de configuração SSO criados!"
+show_completion_message() {
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO!${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "${CYAN}Acesse as aplicações:${NC}"
+    echo -e "  • Superset: ${BLUE}https://$PUBLIC_DOMAIN${NC}"
+    echo -e "  • Airflow:  ${BLUE}https://airflow.$PUBLIC_DOMAIN${NC}"
+    echo -e "  • Hop:      ${BLUE}https://hop.$PUBLIC_DOMAIN${NC}"
+    echo ""
+    echo -e "${YELLOW}Próximos passos:${NC}"
+    echo "  1. Configure rotas do Cloudflare Tunnel:"
+    echo "     - bi.$PUBLIC_DOMAIN → nginx:80"
+    echo "     - airflow.$PUBLIC_DOMAIN → nginx:8080"
+    echo "     - hop.$PUBLIC_DOMAIN → nginx:8081"
+    echo ""
+    echo "  2. Acesse https://$PUBLIC_DOMAIN e faça login com Azure AD"
+    echo ""
+    echo "  3. Primeiro usuário será criado automaticamente como Gamma"
+    echo "     Admin deve elevar permissões via interface web"
+    echo ""
+    echo -e "${CYAN}Comandos úteis:${NC}"
+    echo "  • Ver logs:     docker compose logs -f <serviço>"
+    echo "  • Status:       docker compose ps"
+    echo "  • Restart:      docker compose restart <serviço>"
+    echo "  • Parar tudo:   docker compose down"
+    echo ""
+    echo -e "${YELLOW}Documentação completa: INSTALL.md${NC}"
+    echo ""
 }
 
-# =============================================================================
-# DEPLOY DA PLATAFORMA
-# =============================================================================
-
-deploy_platform() {
-    print_header "Deploy da Plataforma"
-    
-    print_step "Baixando imagens Docker (pode levar alguns minutos)..."
-    docker_compose_cmd pull
-    
-    print_step "Iniciando containers..."
-    docker_compose_cmd up -d
-    
-    print_info "Aguardando containers inicializarem ($STARTUP_WAIT_TIME segundos)..."
-    
-    # Progress bar
-    for i in $(seq 1 $STARTUP_WAIT_TIME); do
-        echo -ne "\rProgresso: [$i/$STARTUP_WAIT_TIME] "
-        printf '█%.0s' $(seq 1 $((i * 50 / STARTUP_WAIT_TIME)))
-        sleep 1
-    done
-    echo ""
-    
-    print_success "Containers iniciados!"
-}
-
-# =============================================================================
-# TESTES E VERIFICAÇÃO
-# =============================================================================
-
-run_tests() {
-    print_header "Executando Testes"
-    
-    local failed=0
-    
-    # Teste 1: Containers rodando
-    print_step "Verificando status dos containers..."
-    
-    # Usar docker_compose_cmd para respeitar permissões
-    if command -v jq &> /dev/null; then
-        local running=$(docker_compose_cmd ps --format json 2>/dev/null | jq -r '.State' | grep -c "running" || echo "0")
-        local total=$(docker_compose_cmd ps --format json 2>/dev/null | wc -l)
-    else
-        # Fallback sem jq
-        local running=$(docker_compose_cmd ps | grep -c "Up" || echo "0")
-        local total=$(docker_compose_cmd ps | wc -l)
-        ((total=total-2))  # Remover header
-    fi
-    
-    if [ "$running" -gt 0 ] && [ "$running" -eq "$total" ]; then
-        print_success "Todos os $total containers estão rodando"
-    else
-        print_warning "$running de $total containers rodando"
-        docker_compose_cmd ps
-        ((failed++))
-    fi
-    
-    # Teste 2: Teste HTTP local
-    print_step "Testando Superset (localhost:80)..."
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:80 | grep -q "200\|302"; then
-        print_success "Superset respondendo"
-    else
-        print_error "Superset não está respondendo"
-        ((failed++))
-    fi
-    
-    print_step "Testando Airflow (localhost:8080)..."
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 | grep -q "200\|302"; then
-        print_success "Airflow respondendo"
-    else
-        print_error "Airflow não está respondendo"
-        ((failed++))
-    fi
-    
-    print_step "Testando Hop (localhost:8081)..."
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 | grep -q "200\|302"; then
-        print_success "Hop respondendo"
-    else
-        print_error "Hop não está respondendo"
-        ((failed++))
-    fi
-    
-    # Teste 3: Cloudflare Tunnel
-    if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
-        print_step "Verificando Cloudflare Tunnel..."
-        if sudo systemctl is-active --quiet cloudflared; then
-            print_success "Cloudflare Tunnel ativo"
-        else
-            print_error "Cloudflare Tunnel não está ativo"
-            ((failed++))
-        fi
-    fi
-    
-    echo ""
-    if [ $failed -eq 0 ]; then
-        print_success "Todos os testes passaram! ✓"
-        return 0
-    else
-        print_warning "$failed teste(s) falharam"
-        return 1
-    fi
-}
-
-# =============================================================================
-# RESUMO E CONCLUSÃO
-# =============================================================================
-
-print_summary() {
-    echo ""
-    echo -e "${WHITE}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}           ✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO!${NC}"
-    echo -e "${WHITE}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-    
-    echo -e "${CYAN}📊 URLs de Acesso:${NC}"
-    echo ""
-    
-    if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
-        echo -e "  ${ROCKET} ${WHITE}Superset BI:${NC}    https://bi.bomgado.com.br"
-        echo -e "  ${ROCKET} ${WHITE}Airflow:${NC}        https://airflow.bomgado.com.br"
-        echo -e "  ${ROCKET} ${WHITE}Hop:${NC}            https://hop.bomgado.com.br"
-    else
-        echo -e "  ${ROCKET} ${WHITE}Superset BI:${NC}    http://localhost:80"
-        echo -e "  ${ROCKET} ${WHITE}Airflow:${NC}        http://localhost:8080"
-        echo -e "  ${ROCKET} ${WHITE}Hop:${NC}            http://localhost:8081"
-    fi
-    
-    echo ""
-    echo -e "${CYAN}🔐 Credenciais Padrão:${NC}"
-    echo ""
-    echo -e "  ${WHITE}Usuário:${NC}   admin"
-    echo -e "  ${WHITE}Senha:${NC}     admin123"
-    echo ""
-    echo -e "  ${WARN} ${YELLOW}Altere as senhas após o primeiro login!${NC}"
-    echo ""
-    
-    echo -e "${CYAN}📝 Comandos Úteis:${NC}"
-    echo ""
-    
-    # Ajustar comandos se usar sudo
-    if [ "$USE_SUDO_DOCKER" = true ]; then
-        echo -e "  ${WHITE}Status:${NC}              sudo docker compose ps"
-        echo -e "  ${WHITE}Logs:${NC}                sudo docker compose logs -f"
-        echo -e "  ${WHITE}Reiniciar:${NC}           sudo docker compose restart"
-        echo -e "  ${WHITE}Parar:${NC}               sudo docker compose down"
-        echo -e "  ${WHITE}Iniciar:${NC}             sudo docker compose up -d"
-        echo ""
-        echo -e "  ${WARN} ${YELLOW}Após logout/login, não precisará mais de 'sudo'${NC}"
-    else
-        echo -e "  ${WHITE}Status:${NC}              docker compose ps"
-        echo -e "  ${WHITE}Logs:${NC}                docker compose logs -f"
-        echo -e "  ${WHITE}Reiniciar:${NC}           docker compose restart"
-        echo -e "  ${WHITE}Parar:${NC}               docker compose down"
-        echo -e "  ${WHITE}Iniciar:${NC}             docker compose up -d"
-    fi
-    
-    if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
-        echo -e "  ${WHITE}Cloudflare Tunnel:${NC}   sudo systemctl status cloudflared"
-    fi
-    
-    echo ""
-    echo -e "${CYAN}📚 Documentação:${NC}"
-    echo ""
-    echo -e "  ${WHITE}README.md${NC}                 - Visão geral"
-    echo -e "  ${WHITE}TROUBLESHOOTING.md${NC}        - Solução de problemas"
-    echo -e "  ${WHITE}AZURE_ENTRA_SSO.md${NC}        - Configurar SSO"
-    echo -e "  ${WHITE}SECURITY_BEST_PRACTICES.md${NC} - Boas práticas"
-    echo ""
-    
-    echo -e "${CYAN}📊 Logs da Instalação:${NC}"
-    echo -e "  $LOG_FILE"
-    echo ""
-    
-    echo -e "${WHITE}═══════════════════════════════════════════════════════════${NC}"
-}
-
-# =============================================================================
-# FUNÇÃO MAIN
-# =============================================================================
-
-show_help() {
-    cat << EOF
-Uso: ./install.sh [OPÇÕES]
-
-OPÇÕES:
-    --auto                    Modo totalmente automático (sem confirmações)
-    --config FILE             Usar arquivo de configuração específico
-    --help                    Exibir esta ajuda
-    
-EXEMPLOS:
-    ./install.sh                          # Modo interativo
-    ./install.sh --auto                   # Totalmente automático
-    ./install.sh --config install.config  # Com arquivo de configuração
-    
-ARQUIVO DE CONFIGURAÇÃO:
-    Copie install.config.example para install.config e edite os valores.
-    
-DOCUMENTAÇÃO:
-    INSTALLATION_GUIDE.md - Guia completo passo a passo
-    README.md             - Visão geral do projeto
-    
-EOF
-}
+# ========================================================================
+# MAIN
+# ========================================================================
 
 main() {
-    # Parse argumentos
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --auto)
-                AUTO_MODE=true
-                INSTALL_MODE="auto"
-                shift
-                ;;
-            --config)
-                CONFIG_FILE="$2"
-                shift 2
-                ;;
-            --help|-h)
-                show_help
-                exit 0
-                ;;
-            *)
-                print_error "Opção desconhecida: $1"
-                show_help
-                exit 1
-                ;;
-        esac
-    done
-    
-    # Banner
     clear
-    echo -e "${PURPLE}"
-    cat << "EOF"
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║        📊  INSTALAÇÃO AUTOMATIZADA - PLATAFORMA DE DADOS  📊     ║
-║                                                                   ║
-║              Apache Airflow + Superset + Hop + Docker             ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-EOF
-    echo -e "${NC}"
     
-    log "========== INÍCIO DA INSTALAÇÃO =========="
-    log "Modo: $INSTALL_MODE"
-    log "Data: $(date)"
-    log "Usuário: $USER"
-    log "Diretório: $SCRIPT_DIR"
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  Plataforma de Dados Enterprise${NC}"
+    echo -e "${BLUE}  Instalação Automatizada${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
     
-    # Verificações iniciais
-    check_root
-    check_os
+    # Pré-requisitos
+    log_step "VERIFICANDO PRÉ-REQUISITOS"
+    check_ubuntu
+    check_sudo
+    check_env_file
     
-    # Carregar configuração
-    if [ -n "$CONFIG_FILE" ]; then
-        load_config
-    elif [ "$AUTO_MODE" = false ]; then
-        create_config_interactive
-    fi
+    # Carregar variáveis do .env
+    source .env
     
-    # Executar instalação
-    install_dependencies
-    configure_timezone
+    # Instalação
+    install_docker
+    install_cloudflare_tunnel
+    build_superset_image
+    start_infrastructure
+    initialize_databases
+    start_all_services
     
-    if [ "$INSTALL_DOCKER" = "yes" ]; then
-        install_docker
-    fi
+    # Status
+    show_status
     
-    if [ "$CONFIGURE_DOCKER_PERMISSIONS" = "yes" ]; then
-        configure_docker_permissions
-    fi
+    # Mensagem final
+    show_completion_message
     
-    if [ "$AUTO_GENERATE_SECRETS" = "yes" ]; then
-        generate_secrets
-    fi
-    
-    create_env_file
-    create_directory_structure
-    
-    if [ "$SETUP_AZURE_SSO" = "yes" ]; then
-        setup_azure_sso_config
-    fi
-    
-    configure_permissions
-    
-    if [ "$SETUP_CLOUDFLARE" = "yes" ]; then
-        setup_cloudflare_tunnel || true
-    fi
-    
-    deploy_platform
-    
-    if [ "$RUN_TESTS" = "yes" ]; then
-        run_tests
-    fi
-    
-    print_summary
-    
-    log "========== INSTALAÇÃO CONCLUÍDA =========="
+    # Aviso sobre reinicialização
+    echo -e "${YELLOW}ATENÇÃO:${NC}"
+    echo "  Após este script, faça logout/login para usar docker sem sudo"
+    echo "  Ou execute: newgrp docker"
+    echo ""
 }
 
 # Executar
