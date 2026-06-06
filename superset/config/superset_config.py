@@ -11,6 +11,7 @@ Documentação: https://superset.apache.org/docs/configuration/configuring-super
 import os
 from celery.schedules import crontab
 from flask_appbuilder.security.manager import AUTH_OAUTH
+import redis
 
 # =============================================================================
 # CONFIGURAÇÕES DE SSO - AZURE ENTRA ID
@@ -28,13 +29,29 @@ WTF_CSRF_ENABLED = True
 WTF_CSRF_EXEMPT_LIST = []
 WTF_CSRF_TIME_LIMIT = None
 
-# Configurar ProxyFix e Session para OAuth state
+# =============================================================================
+# SESSÃO NO REDIS - CRÍTICO PARA OAUTH FUNCIONAR
+# =============================================================================
+# Configurar Flask-Session com Redis ANTES do FLASK_APP_MUTATOR
+# Isso garante que Authlib/OAuth use sessão persistente
+
+SESSION_TYPE = 'redis'
+SESSION_REDIS = redis.from_url(
+    f"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
+)
+SESSION_USE_SIGNER = True
+SESSION_PERMANENT = False
+SESSION_COOKIE_SECURE = False  # FIXME: True em produção com HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_NAME = 'superset_session'
+
+# Configurar ProxyFix para HTTPS por trás do Cloudflare/nginx
 def FLASK_APP_MUTATOR(app):
     from werkzeug.middleware.proxy_fix import ProxyFix
     from flask_session import Session
-    import redis
     
-    # ProxyFix para HTTPS por trás do Cloudflare/nginx
+    # ProxyFix para HTTPS
     app.wsgi_app = ProxyFix(
         app.wsgi_app,
         x_for=1,
@@ -44,26 +61,11 @@ def FLASK_APP_MUTATOR(app):
         x_prefix=1
     )
     
-    # CRÍTICO: Inicializar Redis Session Backend para OAuth state
-    app.config['SESSION_TYPE'] = 'redis'
-    app.config['SESSION_REDIS'] = redis.from_url(
-        f"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
-    )
-    app.config['SESSION_USE_SIGNER'] = True
-    app.config['SESSION_PERMANENT'] = False
-    app.config['PERMANENT_SESSION_LIFETIME'] = 43200  # 12 horas
-    
-    # Inicializar Flask-Session (OBRIGATÓRIO para SESSION_TYPE funcionar)
+    # Inicializar Flask-Session com as configurações acima
     Session(app)
     
-    # Configurar cookies de sessão para trabalhar com Cloudflare/nginx
-    # Temporariamente desabilitar SECURE para debugging
-    app.config['SESSION_COOKIE_SECURE'] = False  # FIXME: deveria ser True em produção
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-    app.config['SESSION_COOKIE_DOMAIN'] = None  # Não restringir domínio
-    app.config['SESSION_COOKIE_NAME'] = 'superset_session'
-    app.config['REMEMBER_COOKIE_SECURE'] = False  # FIXME: deveria ser True em produção
+    # Configurar cookies de remember-me
+    app.config['REMEMBER_COOKIE_SECURE'] = False  # FIXME: True em produção
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
