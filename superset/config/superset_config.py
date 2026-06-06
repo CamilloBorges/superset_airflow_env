@@ -26,7 +26,8 @@ PREFERRED_URL_SCHEME = 'https'
 # PUBLIC_ROLE_LIKE = "Gamma"  # REMOVIDO - forçar autenticação obrigatória
 
 WTF_CSRF_ENABLED = True
-WTF_CSRF_EXEMPT_LIST = []
+# Temporariamente desabilitar CSRF para OAuth endpoints para debugging
+WTF_CSRF_EXEMPT_LIST = ['.*login.*', '.*oauth.*']
 WTF_CSRF_TIME_LIMIT = None
 
 # =============================================================================
