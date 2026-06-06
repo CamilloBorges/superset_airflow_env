@@ -1,523 +1,270 @@
-# Plataforma de Dados - BI & Engenharia de Dados
+# Plataforma de Dados Empresarial
 
-Ambiente completo de Business Intelligence e Engenharia de Dados baseado em containers Docker, seguindo o princípio de **Infrastructure as Code (IaC)**.
+Ambiente completo de Business Intelligence e Engenharia de Dados com:
+- **Apache Superset 6.1.0** - Visualização e BI
+- **Apache Airflow 2.8.0** - Orquestração de workflows
+- **Apache Hop 2.7.0** - ETL/ELT
+- **PostgreSQL 15** - Banco de metadados
+- **Redis 7** - Cache e message broker
+- **Nginx** - Reverse proxy
+- **Cloudflare Tunnel** - Acesso seguro HTTPS
+- **Azure Entra ID** - SSO obrigatório
 
-> 🚀 **Início Rápido?** Consulte [QUICKSTART.md](QUICKSTART.md) para setup em 5 minutos  
-> � **Instalação Completa do Zero?** Consulte [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) - Ubuntu limpo até SSO  
-> 🐧 **Ubuntu Server do Zero?** Consulte [UBUNTU_SETUP.md](UBUNTU_SETUP.md) para preparação do servidor  
-> ☁️ **Cloudflare Tunnel?** Consulte [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) para acesso seguro  
-> 🔐 **Quer SSO com Azure Entra ID?** Consulte [AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md) para configuração
+## 🚀 Instalação Automatizada
 
-## 🏗️ Arquitetura da Stack
+```bash
+# 1. Clone o repositório
+git clone https://github.com/CamilloBorges/superset_airflow_env.git data-platform
+cd data-platform
 
-Esta plataforma integra as seguintes ferramentas open-source:
+# 2. Configure variáveis (edite .env com seus valores Azure)
+cp .env.example .env
+nano .env
 
-**Acesso e Segurança:**
-- **Cloudflare Tunnel** - Proxy seguro sem portas expostas, SSL/TLS automático, DDoS protection
-- **Nginx** (Alpine) - Reverse proxy HTTP local (porta 80, 8080, 8081)
+# 3. Execute instalação automatizada
+./install.sh
+```
 
-**Plataforma de Dados:**
-- **Apache Airflow** (v2.8.0) - Orquestrador de workflows com CeleryExecutor
-- **Apache Superset** (v3.0.0) - Plataforma de visualização e BI
-- **Apache Hop** (v2.7.0) - Motor de ETL/ELT
+**Tempo total**: ~20 minutos  
+**Documentação completa**: [INSTALL.md](INSTALL.md)
 
-**Infraestrutura:**
-- **PostgreSQL** (v15) - Banco de dados de metadados
-- **Redis** (v7) - Message broker para Celery
+---
 
-### Fluxo de Acesso
+## 📋 Pré-requisitos
+
+### Servidor
+- Ubuntu 24.04 LTS (ou 22.04)
+- 8GB RAM mínimo (16GB recomendado)
+- 30GB disco
+- Acesso SSH com sudo
+
+### Azure Portal
+- Conta Azure com permissão para criar App Registrations
+- Tenant ID do Azure Entra ID
+- 2 App Registrations criados (Superset + Airflow)
+
+### Cloudflare
+- Conta Cloudflare
+- Domínio configurado no Cloudflare
+- Tunnel criado e token gerado
+
+---
+
+## 🏗️ Arquitetura
 
 ```
 Internet (HTTPS)
     ↓
-bi.bomgado.com.br (Cloudflare DNS)
+Cloudflare Edge (SSL/TLS + DDoS Protection)
     ↓
-Cloudflare Edge Network (SSL/TLS + DDoS)
+Cloudflare Tunnel (encrypted, no public ports)
     ↓
-Cloudflare Tunnel (conexão encriptada, sem portas públicas)
+Ubuntu Server Azure VM
     ↓
-Servidor Azure Ubuntu (172.174.210.23)
+Nginx Reverse Proxy (HTTP local)
     ↓
-Nginx Reverse Proxy (HTTP local: 80, 8080, 8081)
-    ↓
-┌──────────────┬──────────────┬──────────────┐
-│  Superset    │   Airflow    │     Hop      │
-│   :8088      │   :8080      │   :8081      │
-└──────────────┴──────────────┴──────────────┘
-         ↓              ↓
-    ┌────────┐     ┌─────┐
-    │PostgreSQL│   │Redis│
-    │  :5432   │   │:6379│
-    └────────┘     └─────┘
+┌─────────────┬─────────────┬─────────────┐
+│  Superset   │   Airflow   │     Hop     │
+│   :8088     │   :8080     │   :8081     │
+└─────────────┴─────────────┴─────────────┘
+       ↓               ↓
+  PostgreSQL         Redis
+    :5432           :6379
 ```
 
-**🌐 URLs de Acesso:**
-- **Superset BI:** https://bi.bomgado.com.br
-- **Airflow:** https://airflow.bomgado.com.br
-- **Hop:** https://hop.bomgado.com.br
-
-## 📁 Estrutura do Repositório
-
-```
-superset_airflow_env/
-├── .env.example                    # Template de variáveis de ambiente
-├── .gitignore                      # Arquivos ignorados pelo Git
-├── docker-compose.yml              # Definição completa da infraestrutura (13 serviços)
-├── README.md                       # Esta documentação
-├── INSTALLATION_GUIDE.md           # Guia completo de instalação do zero
-├── CLOUDFLARE_TUNNEL_SETUP.md      # Configuração Cloudflare Tunnel
-│
-├── nginx/                          # Nginx Reverse Proxy
-│   └── nginx.conf                  # Configuração HTTP para Cloudflare Tunnel
-│
-├── airflow/                        # Apache Airflow
-│   ├── dags/                       # DAGs (pipelines do Airflow)
-│   ├── logs/                       # Logs de execução
-│   ├── plugins/                    # Plugins customizados
-│   └── config/                     # Arquivos de configuração
-│
-├── superset/                       # Apache Superset
-│   ├── config/                     # Configurações do Superset
-│   └── data/                       # Dados e caches
-│
-├── hop/                            # Apache Hop
-│   ├── config/                     # Configurações do Hop
-│   ├── projects/                   # Projetos e pipelines Hop
-│   └── metadata/                   # Metadados e histórico
-│
-├── postgres/                       # PostgreSQL
-│   └── init-scripts/               # Scripts de inicialização do banco
-│
-└── shared/                         # Arquivos compartilhados
-    └── data/                       # Dados compartilhados entre serviços
-```
-
-## 🚀 Guia de Inicialização
-
-> 💡 **Instalação do Zero?** Para instalação completa em Ubuntu limpo com Cloudflare Tunnel, siga o **[AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)** - instalação automatizada em 15-20 minutos.
-
-### Pré-requisitos
-
-- **Docker** (versão 20.10 ou superior)
-- **Docker Compose** (versão 2.0 ou superior)
-- Pelo menos **8GB de RAM** disponível para os containers
-- **10GB de espaço em disco** livre
-- **Cloudflare Tunnel** configurado (opcional mas recomendado)
-
-> 📘 **Instalando em Ubuntu Server do Zero?**  
-> **NOVO!** Instalação 100% automatizada: [AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md) - 15-20 minutos  
-> Ou manual passo a passo: [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) - 60-80 minutos
-
-> ☁️ **Configurando Cloudflare Tunnel?**  
-> Consulte: [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) - acesso seguro sem expor portas públicas.
-
-### 🎯 Três Formas de Instalar:
-
-#### 1️⃣ Instalação Automatizada (Recomendado) ⚡
-
-```bash
-git clone <url-repositorio> data-platform
-cd data-platform
-chmod +x install.sh
-
-# Modo totalmente automático
-./install.sh --auto
-
-# OU com arquivo de configuração
-cp install.config.example install.config
-nano install.config  # Edite com seus valores
-./install.sh --config install.config
-```
-
-**Tempo:** 15-20 minutos  
-**Guia completo:** [AUTOMATED_INSTALL.md](AUTOMATED_INSTALL.md)
-
-#### 2️⃣ Instalação Manual Guiada
-
-Siga o guia passo a passo completo:  
-**[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - 60-80 minutos
-
-#### 3️⃣ Início Rápido (Docker já instalado)
-
-**[QUICKSTART.md](QUICKSTART.md)** - 5 minutos
+**Acessos:**
+- Superset: https://bi.bomgado.com.br
+- Airflow: https://airflow.bomgado.com.br  
+- Hop: https://hop.bomgado.com.br
 
 ---
 
-### Passo 1 (Manual): Clonar o Repositório
+## 📁 Estrutura do Projeto
 
-```bash
-git clone <url-do-repositorio>
-cd superset_airflow_env
+```
+data-platform/
+├── .env                          # Variáveis de ambiente (NÃO commitado)
+├── .env.example                  # Template de variáveis
+├── docker-compose.yml            # Orquestração de containers
+├── install.sh                    # Script de instalação automatizada
+├── INSTALL.md                    # Documentação de instalação
+├── airflow/
+│   ├── config/
+│   │   └── webserver_config.py   # SSO Azure configurado
+│   ├── dags/                     # DAGs do Airflow
+│   ├── logs/                     # Logs do Airflow
+│   └── plugins/                  # Plugins customizados
+├── superset/
+│   ├── Dockerfile                # Superset 6.1.0 + authlib + psycopg2
+│   ├── config/
+│   │   └── superset_config.py    # SSO Azure + Redis session
+│   └── data/                     # Dados persistentes
+├── hop/
+│   ├── projects/                 # Projetos Hop
+│   └── metadata/                 # Metadata Hop
+├── nginx/
+│   └── nginx.conf                # Configuração Nginx
+├── postgres/
+│   └── init-scripts/
+│       └── 01-init-databases.sh  # Criação de DBs
+└── shared/
+    └── data/                     # Dados compartilhados
 ```
 
-### Passo 2: Configurar Variáveis de Ambiente
+---
 
-Copie o arquivo de exemplo e edite com suas configurações:
+## 🔐 Configuração Azure SSO
 
-```bash
-cp .env.example .env
-```
+### 1. Criar App Registrations
 
-⚠️ **IMPORTANTE**: Edite o arquivo `.env` e configure:
+**Superset:**
+- Nome: `bi-bomgado-superset`
+- Redirect URI: `https://bi.bomgado.com.br/oauth-authorized/azure`
+- Scopes: `openid`, `email`, `profile`, `User.Read`
 
-1. **Domínio Público** (OBRIGATÓRIO):
-   - `PUBLIC_DOMAIN` - Seu domínio Cloudflare (ex: `bi.bomgado.com.br`)
+**Airflow:**
+- Nome: `airflow-bomgado`
+- Redirect URI: `https://airflow.bomgado.com.br/oauth-authorized/azure`
+- Scopes: `openid`, `email`, `profile`, `User.Read`
 
-2. **Senhas e Secrets** (OBRIGATÓRIO):
-   - `POSTGRES_PASSWORD` - Senha do PostgreSQL
-   - `REDIS_PASSWORD` - Senha do Redis
-   - `AIRFLOW__CORE__FERNET_KEY` - Chave Fernet do Airflow
-   - `AIRFLOW__WEBSERVER__SECRET_KEY` - Secret key do webserver
-   - `SUPERSET_SECRET_KEY` - Secret key do Superset (mínimo 42 caracteres)
+### 2. Gerar Client Secrets
 
-3. **Gerar Fernet Key para o Airflow**:
+Para cada App Registration:
+1. Certificates & secrets → New client secret
+2. Copiar o Value (não o Secret ID)
+3. Adicionar ao `.env`
 
-```bash
-# Usar Docker para gerar
-docker run --rm python:3.11-slim sh -c "pip install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-```
-
-Ou use Docker:
+### 3. Configurar .env
 
 ```bash
-docker run --rm python:3.11-slim sh -c "pip install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+AZURE_TENANT_ID=0ffb4bbd-7ce2-4e66-b35b-633c7d4ef035
+AZURE_SUPERSET_CLIENT_ID=<Application ID do Superset>
+AZURE_SUPERSET_CLIENT_SECRET=<Secret Value do Superset>
+AZURE_AIRFLOW_CLIENT_ID=<Application ID do Airflow>
+AZURE_AIRFLOW_CLIENT_SECRET=<Secret Value do Airflow>
 ```
 
-### Passo 3: Configurar Cloudflare Tunnel (Recomendado)
+---
 
-**Com Cloudflare Tunnel, você NÃO precisa:**
-- ❌ Gerar certificados SSL localmente
-- ❌ Abrir portas no firewall/NSG
-- ❌ Configurar DNS manualmente
+## 🔧 Comandos Úteis
 
 ```bash
-# Instalar e configurar cloudflared
-./configure-cloudflare.sh <SEU_TOKEN>
-
-# Ou siga o guia completo
-# https://github.com/seu-repositorio/CLOUDFLARE_TUNNEL_SETUP.md
-```
-
-### Passo 4: Ajustar AIRFLOW_UID (Linux/Mac)
-
-```bash
-echo "AIRFLOW_UID=$(id -u)" >> .env
-```
-
-No Windows, mantenha o valor padrão `50000`.
-
-### Passo 3: Ajustar Permissões (Linux/Mac)
-
-**IMPORTANTE**: No Linux/Mac, é necessário ajustar permissões antes de iniciar:
-
-```bash
-# Dar permissão de execução aos scripts
-chmod +x quick-start.sh
-chmod +x postgres/init-scripts/*.sh
-
-# Criar diretórios necessários
-mkdir -p airflow/logs airflow/dags airflow/plugins
-
-# Ajustar permissões do Airflow (UID 50000)
-sudo chown -R 50000:0 airflow/
-chmod -R 755 airflow/
-chmod -R 777 airflow/logs
-```
-
-**No Windows**, não é necessário ajustar permissões.
-
-### Passo 4: Criar Diretórios com Permissões (Linux/Mac)
-
-```bash
-mkdir -p airflow/logs airflow/dags airflow/plugins
-chmod -R 777 airflow/logs
-```
-
-No Windows, não é necessário.
-
-### Passo 5: Inicializar o Ambiente
-
-Execute o comando para subir todos os serviços:
-
-**Linux/Mac:**
-```bash
-# Dar permissão de execução ao script (primeira vez)
-chmod +x quick-start.sh
-
-# Executar script de inicialização
-./quick-start.sh
-```
-
-**Windows PowerShell:**
-```powershell
-.\quick-start.ps1
-```
-
-**Ou manualmente (qualquer plataforma):**
-```bash
-docker compose up -d
-```
-
-Este comando irá:
-1. Baixar todas as imagens Docker necessárias
-2. Criar os bancos de dados no PostgreSQL
-3. Inicializar o banco de metadados do Airflow
-4. Criar usuário admin do Airflow
-5. Inicializar o banco de metadados do Superset
-6. Criar usuário admin do Superset
-7. Subir todos os serviços
-
-⏱️ **Tempo estimado**: 5-10 minutos na primeira execução.
-
-### Passo 6: Verificar o Status dos Serviços
-
-```bash
+# Ver status de todos os serviços
 docker compose ps
-```
 
-Todos os serviços devem estar com status `healthy` ou `running`.
-
-### Passo 7: Acessar as Interfaces Web
-
-Após a inicialização completa, acesse via Cloudflare Tunnel:
-
-| Serviço | URL | Usuário Padrão | Senha Padrão |
-|---------|-----|----------------|--------------|
-| **Superset BI** | https://bi.bomgado.com.br | admin | admin123 |
-| **Airflow** | https://airflow.bomgado.com.br | admin | admin123 |
-| **Hop** | https://hop.bomgado.com.br | cluster | cluster |
-
-> 💡 URLs com HTTPS válido (certificado Cloudflare) e DDoS protection  
-> 🔒 Nenhuma porta exposta publicamente no servidor
-
-**Acesso Local (teste):**
-- Superset: http://localhost:80
-- Airflow: http://localhost:8080  
-- Hop: http://localhost:8081
-
-⚠️ **IMPORTANTE**: 
-- Altere as senhas padrão após o primeiro login!
-- Configure Azure Entra SSO para autenticação corporativa (opcional)
-
----
-
-## 📋 Recursos Adicionais
-
-- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Guia completo de instalação do zero (Ubuntu limpo → SSO)
-- **[QUICKSTART.md](QUICKSTART.md)** - Início rápido em 5 minutos
-- **[CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md)** - Configurar Cloudflare Tunnel (recomendado)
-- **[CHECKLIST.md](CHECKLIST.md)** - Checklist completo de instalação e verificação
-- **[UBUNTU_SETUP.md](UBUNTU_SETUP.md)** - Guia completo para Ubuntu Server do zero
-- **[AZURE_SETUP.md](AZURE_SETUP.md)** - Configuração de VM Azure (opcional com Cloudflare)
-- **[HTTPS_SETUP.md](HTTPS_SETUP.md)** - Configuração SSL/TLS sem Cloudflare
-- **[AZURE_ENTRA_SSO.md](AZURE_ENTRA_SSO.md)** - Configurar SSO com Azure Entra ID
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solução de problemas comuns
-- **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Estrutura detalhada do projeto
-- **[hop/HOP_GUIDE.md](hop/HOP_GUIDE.md)** - Guia de uso do Apache Hop
-
----
-
-## 🔧 Operações Comuns
-
-### Visualizar Logs
-
-```bash
-# Todos os serviços
-docker compose logs -f
-
-# Serviço específico
-docker compose logs -f airflow-webserver
+# Ver logs em tempo real
 docker compose logs -f superset
-docker compose logs -f hop-server
-```
+docker compose logs -f airflow-webserver
 
-### Parar o Ambiente
-
-```bash
-docker compose stop
-```
-
-### Iniciar o Ambiente (após parar)
-
-```bash
-docker compose start
-```
-
-### Reiniciar um Serviço Específico
-
-```bash
-docker compose restart airflow-scheduler
+# Reiniciar um serviço
 docker compose restart superset
-```
 
-### Destruir o Ambiente Completamente
-
-⚠️ **ATENÇÃO**: Isso removerá todos os containers, volumes e dados!
-
-```bash
-docker compose down -v
-```
-
-### Atualizar Imagens
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-## 🔌 Integração Airflow + Hop
-
-Para executar pipelines do Apache Hop a partir de DAGs do Airflow:
-
-### 1. Criar uma DAG de Exemplo
-
-Crie o arquivo `airflow/dags/hop_example_dag.py`:
-
-```python
-from airflow import DAG
-from airflow.operators.bash import BashOperator
-from datetime import datetime, timedelta
-
-default_args = {
-    'owner': 'data-team',
-    'depends_on_past': False,
-    'start_date': datetime(2024, 1, 1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-}
-
-with DAG(
-    'hop_pipeline_example',
-    default_args=default_args,
-    description='Exemplo de execução de pipeline Hop via Airflow',
-    schedule_interval='@daily',
-    catchup=False,
-    tags=['hop', 'etl'],
-) as dag:
-
-    run_hop_pipeline = BashOperator(
-        task_id='execute_hop_pipeline',
-        bash_command='''
-        docker exec hop-server /opt/hop/hop-run.sh \
-          --file=/opt/hop/projects/exemplo/pipeline.hpl \
-          --runconfig=local \
-          --level=Basic
-        ''',
-    )
-
-    run_hop_pipeline
-```
-
-### 2. Acessar Volumes Compartilhados
-
-Os pipelines do Hop devem ser salvos em `hop/projects/` e estarão acessíveis tanto no container do Hop quanto no Airflow através de volumes compartilhados.
-
-## 🔐 Segurança
-
-### Conexões com Bancos de Dados no Airflow
-
-Para adicionar conexões no Airflow:
-
-1. Acesse o Airflow UI → Admin → Connections
-2. Adicione suas conexões de banco de dados, APIs, etc.
-3. Utilize as variáveis de ambiente quando possível
-
-### Conexões no Superset
-
-Para conectar o Superset a fontes de dados:
-
-1. Acesse Superset UI → Settings → Database Connections
-2. Adicione conexões usando SQLAlchemy URIs
-
-Exemplo para PostgreSQL local:
-```
-postgresql://usuario:senha@postgres:5432/nome_banco
-```
-
-## 📊 Configuração do Executor
-
-O ambiente está configurado para usar **CeleryExecutor** por padrão, permitindo execução distribuída de tarefas.
-
-Para usar **LocalExecutor** (mais simples, sem workers):
-
-1. Edite o arquivo `.env`:
-```bash
-AIRFLOW_EXECUTOR=LocalExecutor
-```
-
-2. Comente ou remova o serviço `airflow-worker` no `docker-compose.yml`
-
-3. Reinicie o ambiente:
-```bash
+# Parar tudo
 docker compose down
-docker compose up -d
+
+# Parar e remover volumes (CUIDADO: apaga dados!)
+docker compose down -v
+
+# Rebuild de imagens customizadas
+docker compose build superset-init
+
+# Acessar shell de um container
+docker compose exec superset bash
+docker compose exec airflow-webserver bash
 ```
+
+---
 
 ## 🐛 Troubleshooting
 
-### Problema: Serviços não inicializam
+### OAuth não funciona
 
-**Solução**: Verifique os logs:
-```bash
-docker compose logs postgres
-docker compose logs redis
-```
+1. Verifique variáveis Azure no `.env`
+2. Confirme Redirect URIs no Azure Portal
+3. Verifique logs: `docker compose logs superset | grep -i oauth`
+4. Limpe cookies do navegador
+5. Verifique se Cloudflare Tunnel está ativo
 
-### Problema: "Permission denied" no Airflow (Linux/Mac)
-
-**Solução**: Ajuste as permissões:
-```bash
-sudo chown -R $(id -u):0 airflow/
-chmod -R 755 airflow/
-chmod -R 777 airflow/logs
-```
-
-### Problema: Porta já em uso
-
-**Solução**: Altere as portas no arquivo `.env`:
-```bash
-AIRFLOW_EXTERNAL_PORT=8081
-SUPERSET_EXTERNAL_PORT=8089
-```
-
-### Problema: Falta de memória
-
-**Solução**: Aumente a memória disponível para o Docker (configurações do Docker Desktop) para pelo menos 8GB.
-
-### Resetar Ambiente Completamente
+### Serviço não inicia
 
 ```bash
-docker compose down -v
-rm -rf airflow/logs/*
-rm -rf superset/data/*
+# Ver logs detalhados
+docker compose logs <serviço>
+
+# Verificar healthcheck
+docker compose ps
+
+# Reiniciar ordem correta
+docker compose up -d postgres redis
+sleep 30
 docker compose up -d
 ```
 
-## 📚 Documentação Oficial
+### Migrations falhando
 
-- [Apache Airflow](https://airflow.apache.org/docs/)
-- [Apache Superset](https://superset.apache.org/docs/intro)
-- [Apache Hop](https://hop.apache.org/manual/latest/)
-- [Docker Compose](https://docs.docker.com/compose/)
+```bash
+# Superset
+docker compose exec superset superset db upgrade
+docker compose exec superset superset init
 
-## 🤝 Contribuindo
-
-Este projeto segue o princípio de Infrastructure as Code. Para contribuir:
-
-1. Crie um branch para suas mudanças
-2. Teste localmente com `docker compose up`
-3. Commit suas mudanças com mensagens descritivas
-4. Abra um Pull Request
-
-## 📝 Licença
-
-Este projeto utiliza ferramentas open-source. Consulte as licenças individuais:
-- Apache Airflow: Apache License 2.0
-- Apache Superset: Apache License 2.0
-- Apache Hop: Apache License 2.0
+# Airflow
+docker compose exec airflow-webserver airflow db migrate
+```
 
 ---
 
-**Desenvolvido para Engenharia de Dados e Business Intelligence** 🚀
+## 📊 Gestão de Usuários
+
+**Roles Superset:**
+- **Admin**: Acesso total
+- **Alpha**: Criar dashboards e datasets
+- **Gamma**: Visualizar dashboards (padrão novo usuário)
+- **Public**: Visualização pública (desabilitado)
+
+**Roles Airflow:**
+- **Admin**: Acesso total
+- **Op**: Executar e gerenciar DAGs
+- **User**: Visualizar e executar DAGs
+- **Viewer**: Visualização read-only (padrão novo usuário)
+
+**Primeiro login SSO**: Usuário criado automaticamente com role padrão.  
+**Elevar permissões**: Admin deve alterar role no painel de usuários.
+
+---
+
+## 📚 Documentação Adicional
+
+- [INSTALL.md](INSTALL.md) - Guia completo de instalação passo-a-passo
+- [SETUP_DO_ZERO.md](SETUP_DO_ZERO.md) - Análise técnica da arquitetura
+
+---
+
+## 🔄 Atualizações e Manutenção
+
+```bash
+# Atualizar código (sem tocar em dados)
+git pull
+docker compose up -d --build
+
+# Backup de dados
+docker compose exec postgres pg_dump -U dataplatform superset_db > backup_superset.sql
+docker compose exec postgres pg_dump -U dataplatform airflow_db > backup_airflow.sql
+
+# Restore de backup
+cat backup_superset.sql | docker compose exec -T postgres psql -U dataplatform superset_db
+```
+
+---
+
+## 📞 Suporte
+
+Para problemas ou dúvidas, consulte:
+1. Logs dos containers: `docker compose logs`
+2. [INSTALL.md](INSTALL.md) para troubleshooting detalhado
+3. Issues no GitHub: https://github.com/CamilloBorges/superset_airflow_env/issues
+
+---
+
+**Versão**: 2.0  
+**Data**: 2026-06-06  
+**Autor**: Plataforma de Dados Bomgado
