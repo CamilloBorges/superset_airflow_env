@@ -28,21 +28,13 @@ WTF_CSRF_ENABLED = True
 WTF_CSRF_EXEMPT_LIST = []
 WTF_CSRF_TIME_LIMIT = None
 
-# =============================================================================
-# SESSÃO NO REDIS - CRÍTICO PARA OAUTH FUNCIONAR
-# =============================================================================
-# Flask precisa de sessão persistente (Redis) para armazenar OAuth state
-# Sessão em memória (padrão) perde o state entre requests, causando CSRF error
-
-SESSION_TYPE = 'redis'
-SESSION_REDIS = f"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
-SESSION_USE_SIGNER = True
-SESSION_PERMANENT = False
-PERMANENT_SESSION_LIFETIME = 43200  # 12 horas
-
 # Configurar ProxyFix e Session para OAuth state
 def FLASK_APP_MUTATOR(app):
     from werkzeug.middleware.proxy_fix import ProxyFix
+    from flask_session import Session
+    import redis
+    
+    # ProxyFix para HTTPS por trás do Cloudflare/nginx
     app.wsgi_app = ProxyFix(
         app.wsgi_app,
         x_for=1,
@@ -51,6 +43,18 @@ def FLASK_APP_MUTATOR(app):
         x_port=1,
         x_prefix=1
     )
+    
+    # CRÍTICO: Inicializar Redis Session Backend para OAuth state
+    app.config['SESSION_TYPE'] = 'redis'
+    app.config['SESSION_REDIS'] = redis.from_url(
+        f"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
+    )
+    app.config['SESSION_USE_SIGNER'] = True
+    app.config['SESSION_PERMANENT'] = False
+    app.config['PERMANENT_SESSION_LIFETIME'] = 43200  # 12 horas
+    
+    # Inicializar Flask-Session (OBRIGATÓRIO para SESSION_TYPE funcionar)
+    Session(app)
     
     # Configurar cookies de sessão para trabalhar com Cloudflare/nginx
     # Temporariamente desabilitar SECURE para debugging
