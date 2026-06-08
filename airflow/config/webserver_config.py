@@ -89,15 +89,18 @@ SECRET_KEY = os.getenv('AIRFLOW__WEBSERVER__SECRET_KEY', 'change_me_secret_key')
 # Timeout de sessão: 12 horas
 PERMANENT_SESSION_LIFETIME = 43200
 
-# Configurações de cookies para segurança
+# Configurações de cookies para segurança (Cloudflare Tunnel termina SSL)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
-# Configurações de cookies (Cloudflare Tunnel termina SSL)
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = True
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+
+# Desabilitar rate limiting baseado em Redis (usar in-memory)
+# Redis é usado apenas pelo Celery, não pelo webserver
+RATELIMIT_ENABLED = False
 
 # =============================================================================
 # LOGGING
@@ -107,14 +110,6 @@ import logging
 
 # Nível de log
 LOG_LEVEL = logging.INFO
-
-# =============================================================================
-# RATE LIMITING
-# =============================================================================
-
-# Rate limiting para APIs
-RATELIMIT_ENABLED = True
-RATELIMIT_STORAGE_URI = f"redis://:{os.getenv('REDIS_PASSWORD')}@redis:6379/5"
 
 # =============================================================================
 # FIM DA CONFIGURAÇÃO
