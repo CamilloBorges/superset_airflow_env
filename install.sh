@@ -233,6 +233,28 @@ for i in {1..60}; do
     sleep 2
 done
 
+# Aplicar configuração de segurança LDAP (desabilitar bind anônimo)
+echo -n "   Configurando segurança LDAP... "
+cat > /tmp/ldap-disable-anon.ldif << 'EOF'
+dn: cn=config
+changetype: modify
+add: olcDisallows
+olcDisallows: bind_anon
+
+dn: cn=config
+changetype: modify
+add: olcRequires
+olcRequires: authc
+
+dn: olcDatabase={-1}frontend,cn=config
+changetype: modify
+add: olcRequires
+olcRequires: authc
+EOF
+
+docker exec openldap ldapmodify -Y EXTERNAL -H ldapi:/// -f /dev/stdin < /tmp/ldap-disable-anon.ldif &>/dev/null && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}SKIP (já configurado)${NC}"
+rm -f /tmp/ldap-disable-anon.ldif
+
 # PostgreSQL
 echo -n "   PostgreSQL... "
 for i in {1..60}; do
@@ -299,7 +321,9 @@ echo ""
 
 echo -e "${YELLOW}🔐 Acesso phpLDAPadmin:${NC}"
 echo "  Login DN: cn=admin,dc=bomgado,dc=local"
-echo "  Password: (veja LDAP_ADMIN_PASSWORD no .env)"
+echo "  Password: (veja LDAP_ADMIN_PASSWORD no arquivo .credentials-*.txt)"
+echo "  ⚠️  NÃO é 'admin123'! Use a senha gerada do .env"
+echo "  🔒 Acesso anônimo DESABILITADO"
 echo ""
 
 echo -e "${YELLOW}📚 Próximos passos:${NC}"

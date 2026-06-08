@@ -150,7 +150,11 @@ dc=bomgado,dc=local
 
 1. Acesse: https://ldap.bomgado.com.br
 2. Login DN: `cn=admin,dc=bomgado,dc=local`
-3. Password: `${LDAP_ADMIN_PASSWORD}` (do .env)
+3. Password: Use a senha `LDAP_ADMIN_PASSWORD` do arquivo `.env`
+   - **⚠️ NÃO é "admin123"!** A senha é gerada automaticamente e está no `.env`
+   - Exemplo: `otcW5KZIqluJVsvQzYTEk3EkEWRr9g3s`
+   - Consulte o arquivo `.credentials-XXXXXX.txt` gerado durante instalação
+4. **Segurança:** Acesso anônimo está DESABILITADO (autenticação obrigatória)
 
 ### Adicionar Novo Usuário
 

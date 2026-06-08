@@ -108,6 +108,7 @@ services:
   openldap:
     image: osixia/openldap:1.5.0
     container_name: openldap
+    command: --copy-service --loglevel debug  # Force copy internal files
     environment:
       LDAP_ORGANISATION: ${LDAP_ORGANISATION}
       LDAP_DOMAIN: ${LDAP_DOMAIN}
@@ -117,6 +118,8 @@ services:
       LDAP_READONLY_USER_USERNAME: ${LDAP_READONLY_USER}
       LDAP_READONLY_USER_PASSWORD: ${LDAP_READONLY_PASSWORD}
       LDAP_TLS: "false"  # Cloudflare Tunnel gerencia TLS
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
+      LDAP_REPLICATION: "false"  # Disable replication
       TZ: ${TIMEZONE}
     volumes:
       - ldap-data:/var/lib/ldap
