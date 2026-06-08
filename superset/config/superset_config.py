@@ -97,10 +97,6 @@ AUTH_LDAP_FIRSTNAME_FIELD = 'givenName'
 AUTH_LDAP_LASTNAME_FIELD = 'sn'
 AUTH_LDAP_EMAIL_FIELD = 'mail'
 
-# Registrar automaticamente novos usuários do LDAP
-AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = 'Gamma'  # Role padrão para novos usuários
-
 # Mapeamento de grupos LDAP para roles do Superset
 AUTH_ROLES_MAPPING = {
     'cn=admins,ou=groups,dc=bomgado,dc=local': ['Admin'],
@@ -113,6 +109,23 @@ AUTH_ROLES_SYNC_AT_LOGIN = True
 
 # LDAP TLS (desabilitado pois Cloudflare gerencia TLS)
 AUTH_LDAP_USE_TLS = False
+
+# =============================================================================
+# CONTROLE DE ACESSO E AUTO-REGISTRO
+# =============================================================================
+
+# Auto-registro apenas para usuários LDAP autenticados
+# True = cria conta automaticamente no primeiro login LDAP
+# False = admin deve criar conta manualmente antes do login
+AUTH_USER_REGISTRATION = True
+AUTH_USER_REGISTRATION_ROLE = 'Gamma'  # Role padrão
+
+# Desabilitar registro via formulário web
+# Apenas autenticação LDAP ou criação por administrador
+PUBLIC_ROLE_LIKE_GAMMA = False
+
+# Adicionar views de segurança
+FAB_ADD_SECURITY_VIEWS = True
 
 # CSRF Protection habilitado (produção)
 WTF_CSRF_ENABLED = True

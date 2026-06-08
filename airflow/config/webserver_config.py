@@ -42,9 +42,20 @@ AUTH_LDAP_FIRSTNAME_FIELD = 'givenName'
 AUTH_LDAP_LASTNAME_FIELD = 'sn'
 AUTH_LDAP_EMAIL_FIELD = 'mail'
 
-# Registrar automaticamente novos usuários do LDAP
+# =============================================================================
+# AUTO-REGISTRO E CONTROLE DE ACESSO
+# =============================================================================
+
+# Auto-registro apenas para usuários LDAP autenticados
+# True = cria conta automaticamente no primeiro login LDAP
+# False = admin deve criar conta manualmente antes do login
 AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Viewer"  # Role padrão para novos usuários
+AUTH_USER_REGISTRATION_ROLE = "Viewer"  # Role padrão
+
+# Desabilitar registro público (esconde botão "Sign Up")
+# Apenas usuários LDAP ou criados por admin podem acessar
+AUTH_ROLE_PUBLIC = None
+FAB_ADD_SECURITY_VIEWS = True
 
 # Mapeamento de grupos LDAP para roles do Airflow
 # Roles disponíveis: Admin, Op, User, Viewer, Public
@@ -64,9 +75,6 @@ AUTH_LDAP_USE_TLS = False
 # CONFIGURAÇÕES DE SEGURANÇA
 # =============================================================================
 
-# Sem acesso público - autenticação obrigatória
-# AUTH_ROLE_PUBLIC não definido = força autenticação
-
 # CSRF Protection
 WTF_CSRF_ENABLED = True
 WTF_CSRF_TIME_LIMIT = None
@@ -75,8 +83,24 @@ WTF_CSRF_TIME_LIMIT = None
 # SESSION E COOKIES
 # =============================================================================
 
+# Session storage: usar filesystem ao invés de Redis para webserver
+# Redis é usado apenas pelo Celery (broker/backend)
+SESSION_TYPE = 'filesystem'
+SESSION_FILE_DIR = '/tmp/airflow_sessions'
+SESSION_PERMANENT = False
+SESSION_USE_SIGNER = True
+
 # Timeout de sessão: 12 horas
 PERMANENT_SESSION_LIFETIME = 43200
+
+# Configurações de cookies
+SESSION_COOKIE_NAME = 'airflow_session'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Chave secreta para assinatura de sessão
+SECRET_KEY = os.getenv('AIRFLOW__WEBSERVER__SECRET_KEY', 'change_me_secret_key')
 
 # Configurações de cookies (Cloudflare Tunnel termina SSL)
 SESSION_COOKIE_HTTPONLY = True
