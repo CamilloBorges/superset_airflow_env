@@ -94,14 +94,17 @@ case $GROUP_CHOICE in
     1)
         GROUP_CN="admins"
         GROUP_DESC="Administradores"
+        GID_NUMBER="10001"
         ;;
     2)
         GROUP_CN="analysts"
         GROUP_DESC="Analistas"
+        GID_NUMBER="10002"
         ;;
     3)
         GROUP_CN="viewers"
         GROUP_DESC="Visualizadores"
+        GID_NUMBER="10003"
         ;;
     *)
         echo -e "${RED}❌ Opção inválida!${NC}"
@@ -166,7 +169,7 @@ sn: $LAST_NAME
 givenName: $FIRST_NAME
 uid: $USERNAME
 uidNumber: $NEW_UID
-gidNumber: 10000
+gidNumber: $GID_NUMBER
 homeDirectory: /home/$USERNAME
 loginShell: /bin/bash
 mail: $EMAIL
@@ -194,6 +197,7 @@ fi
 
 echo -e "${YELLOW}⏳ Adicionando ao grupo $GROUP_DESC...${NC}"
 
+# Adicionar ao groupOfNames (para autenticação Superset/Airflow)
 cat > /tmp/add-to-group-$USERNAME.ldif <<EOF
 dn: cn=$GROUP_CN,ou=groups,dc=bomgado,dc=local
 changetype: modify
@@ -207,13 +211,34 @@ docker exec openldap ldapmodify -x -H ldap://localhost:389 \
     -f /tmp/add-to-group-$USERNAME.ldif 2>&1
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Usuário adicionado ao grupo com sucesso!${NC}"
+    echo -e "${GREEN}✓ Usuário adicionado ao grupo LDAP com sucesso!${NC}"
 else
-    echo -e "${YELLOW}⚠️  Aviso: Erro ao adicionar ao grupo (usuário foi criado)${NC}"
+    echo -e "${YELLOW}⚠️  Aviso: Erro ao adicionar ao grupo LDAP (usuário foi criado)${NC}"
+fi
+
+# Adicionar ao posixGroup (para LAM e gestão UNIX)
+echo -e "${YELLOW}⏳ Adicionando ao grupo POSIX...${NC}"
+
+cat > /tmp/add-to-posix-$USERNAME.ldif <<EOF
+dn: cn=posix-$GROUP_CN,ou=groups,dc=bomgado,dc=local
+changetype: modify
+add: memberUid
+memberUid: $USERNAME
+EOF
+
+docker exec openldap ldapmodify -x -H ldap://localhost:389 \
+    -D "cn=admin,dc=bomgado,dc=local" \
+    -w "${LDAP_ADMIN_PASSWORD}" \
+    -f /tmp/add-to-posix-$USERNAME.ldif 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Usuário adicionado ao grupo POSIX com sucesso!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Aviso: Erro ao adicionar ao grupo POSIX${NC}"
 fi
 
 # Limpar arquivos temporários
-rm -f /tmp/new-user-$USERNAME.ldif /tmp/add-to-group-$USERNAME.ldif
+rm -f /tmp/new-user-$USERNAME.ldif /tmp/add-to-group-$USERNAME.ldif /tmp/add-to-posix-$USERNAME.ldif
 
 # =============================================================================
 # Resumo Final

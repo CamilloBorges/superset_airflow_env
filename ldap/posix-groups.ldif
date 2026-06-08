@@ -1,0 +1,39 @@
+# =============================================================================
+# Grupos POSIX para LDAP Account Manager
+# =============================================================================
+# Grupos UNIX necessários para criar usuários posixAccount via LAM
+# =============================================================================
+
+# Grupo POSIX: admins
+dn: cn=posix-admins,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-admins
+gidNumber: 10001
+description: Grupo POSIX para Administradores
+memberUid: admin
+
+# Grupo POSIX: analysts
+dn: cn=posix-analysts,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-analysts
+gidNumber: 10002
+description: Grupo POSIX para Analistas
+
+# Grupo POSIX: viewers
+dn: cn=posix-viewers,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-viewers
+gidNumber: 10003
+description: Grupo POSIX para Visualizadores
+
+# Grupo POSIX padrão (users)
+dn: cn=users,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: users
+gidNumber: 10000
+description: Grupo POSIX padrão para todos os usuários
+memberUid: admin

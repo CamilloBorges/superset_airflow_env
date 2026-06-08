@@ -31,7 +31,7 @@ objectClass: top
 ou: services
 description: Contas de servico
 
-# Grupos de Segurança
+# Grupos de Segurança (groupOfNames - para autenticação LDAP)
 # =============================================================================
 
 dn: cn=admins,ou=groups,dc=bomgado,dc=local
@@ -55,6 +55,39 @@ cn: viewers
 description: Visualizadores (somente leitura)
 member: cn=admin,ou=users,dc=bomgado,dc=local
 
+# Grupos POSIX (posixGroup - para LAM e gestão UNIX)
+# =============================================================================
+
+dn: cn=posix-admins,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-admins
+gidNumber: 10001
+description: Grupo POSIX para Administradores
+memberUid: admin
+
+dn: cn=posix-analysts,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-analysts
+gidNumber: 10002
+description: Grupo POSIX para Analistas
+
+dn: cn=posix-viewers,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: posix-viewers
+gidNumber: 10003
+description: Grupo POSIX para Visualizadores
+
+dn: cn=users,ou=groups,dc=bomgado,dc=local
+objectClass: posixGroup
+objectClass: top
+cn: users
+gidNumber: 10000
+description: Grupo POSIX padrão para todos os usuários
+memberUid: admin
+
 # Usuário Administrativo Padrão
 # =============================================================================
 # Username: admin
@@ -70,7 +103,7 @@ sn: Administrator
 givenName: Admin
 uid: admin
 uidNumber: 10000
-gidNumber: 10000
+gidNumber: 10001
 homeDirectory: /home/admin
 loginShell: /bin/bash
 mail: admin@bomgado.local
