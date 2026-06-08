@@ -9,8 +9,10 @@ FROM apache/superset:6.1.0
 
 USER root
 
-# Instalar dependências do sistema para python-ldap
+# Instalar dependências do sistema para compilar python-ldap
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
     libldap2-dev \
     libsasl2-dev \
     ldap-utils \
