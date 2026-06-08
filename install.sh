@@ -177,7 +177,8 @@ rm -f build.log
 # =============================================================================
 echo -e "${YELLOW}[6/8] Iniciando containers...${NC}"
 
-docker compose up -d 2>&1 | grep -v "WARNING: The" || true
+# --quiet-pull suprime output de download, mostra só criação de containers
+docker compose up -d --quiet-pull 2>&1 | grep -E "(Created|Started|Running|Recreated)" || true
 
 echo -e "${GREEN}✓ Containers iniciados${NC}"
 
