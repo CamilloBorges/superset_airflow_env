@@ -37,7 +37,7 @@ SECRET_MAPPING = {
     
     # Airflow
     "airflow-fernet-key": "AIRFLOW__CORE__FERNET_KEY",
-    "airflow-webserver-secret-key": "AIRFLOW__WEBSERVER__SECRET_KEY",
+    "airflow-webserver-secret": "AIRFLOW__WEBSERVER__SECRET_KEY",
     "airflow-admin-username": "AIRFLOW_ADMIN_USERNAME",
     "airflow-admin-password": "AIRFLOW_ADMIN_PASSWORD",
     "airflow-admin-firstname": "AIRFLOW_ADMIN_FIRSTNAME",
@@ -54,10 +54,9 @@ SECRET_MAPPING = {
     
     # Azure OAuth
     "azure-tenant-id": "AZURE_TENANT_ID",
-    "azure-superset-client-id": "AZURE_SUPERSET_CLIENT_ID",
-    "azure-superset-client-secret": "AZURE_SUPERSET_CLIENT_SECRET",
-    "azure-airflow-client-id": "AZURE_AIRFLOW_CLIENT_ID",
-    "azure-airflow-client-secret": "AZURE_AIRFLOW_CLIENT_SECRET",
+    "azure-client-id-superset": "AZURE_SUPERSET_CLIENT_ID",
+    "azure-client-id-airflow": "AZURE_AIRFLOW_CLIENT_ID",
+    "azure-client-secret": "AZURE_CLIENT_SECRET",  # Compartilhado
 }
 
 
@@ -128,6 +127,12 @@ def load_secrets():
         if "REDIS_PASSWORD" in secrets:
             secrets["REDIS_PASSWORD_URLENCODED"] = quote_plus(secrets["REDIS_PASSWORD"])
             print("✓ Generated REDIS_PASSWORD_URLENCODED", file=sys.stderr)
+        
+        # Azure Client Secret é compartilhado entre Airflow e Superset
+        if "AZURE_CLIENT_SECRET" in secrets:
+            secrets["AZURE_SUPERSET_CLIENT_SECRET"] = secrets["AZURE_CLIENT_SECRET"]
+            secrets["AZURE_AIRFLOW_CLIENT_SECRET"] = secrets["AZURE_CLIENT_SECRET"]
+            print("✓ Generated AZURE_SUPERSET_CLIENT_SECRET and AZURE_AIRFLOW_CLIENT_SECRET", file=sys.stderr)
         
         # Adicionar variáveis não-sensíveis do ambiente
         for key in ["COMPOSE_PROJECT_NAME", "TIMEZONE", "PUBLIC_DOMAIN", "AIRFLOW_EXECUTOR",

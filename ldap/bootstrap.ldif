@@ -1,0 +1,77 @@
+# =============================================================================
+# OpenLDAP Bootstrap - Estrutura Organizacional e Usuários Iniciais
+# =============================================================================
+# Este arquivo inicializa o diretório LDAP com:
+# - Estrutura organizacional (OUs)
+# - Grupos de segurança
+# - Usuários administrativos iniciais
+#
+# Domínio: dc=bomgado,dc=local
+# Base DN: dc=bomgado,dc=local
+# =============================================================================
+
+# Unidades Organizacionais (OUs)
+# =============================================================================
+
+dn: ou=users,dc=bomgado,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: users
+description: Usuarios da plataforma de dados
+
+dn: ou=groups,dc=bomgado,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: groups
+description: Grupos de seguranca
+
+dn: ou=services,dc=bomgado,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: services
+description: Contas de servico
+
+# Grupos de Segurança
+# =============================================================================
+
+dn: cn=admins,ou=groups,dc=bomgado,dc=local
+objectClass: groupOfNames
+objectClass: top
+cn: admins
+description: Administradores da plataforma
+member: cn=admin,ou=users,dc=bomgado,dc=local
+
+dn: cn=analysts,ou=groups,dc=bomgado,dc=local
+objectClass: groupOfNames
+objectClass: top
+cn: analysts
+description: Analistas de dados
+member: cn=admin,ou=users,dc=bomgado,dc=local
+
+dn: cn=viewers,ou=groups,dc=bomgado,dc=local
+objectClass: groupOfNames
+objectClass: top
+cn: viewers
+description: Visualizadores (somente leitura)
+member: cn=admin,ou=users,dc=bomgado,dc=local
+
+# Usuário Administrativo Padrão
+# =============================================================================
+# Username: admin
+# Password: admin123 (TROCAR EM PRODUÇÃO!)
+# Roles: Admin em Superset e Airflow
+
+dn: cn=admin,ou=users,dc=bomgado,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: admin
+sn: Administrator
+givenName: Admin
+uid: admin
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/admin
+loginShell: /bin/bash
+mail: admin@bomgado.local
+userPassword: {SSHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g1gvp
