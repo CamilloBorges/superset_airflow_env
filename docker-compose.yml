@@ -157,6 +157,31 @@ services:
     restart: unless-stopped
 
   # =============================================================================
+  # LDAP ACCOUNT MANAGER - Interface Web Simplificada para Usuários
+  # =============================================================================
+  ldap-account-manager:
+    image: ghcr.io/ldapaccountmanager/lam:8.8
+    container_name: ldap-account-manager
+    environment:
+      LDAP_SERVER: ldap://openldap:389
+      LDAP_DOMAIN: ${LDAP_DOMAIN}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      LAM_LANG: pt_BR
+      LAM_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      TZ: ${TIMEZONE}
+    ports:
+      - "8083:80"
+    volumes:
+      - lam-config:/var/lib/ldap-account-manager/config
+      - lam-sessions:/var/lib/ldap-account-manager/sess
+    depends_on:
+      openldap:
+        condition: service_healthy
+    networks:
+      - data-platform-network
+    restart: unless-stopped
+
+  # =============================================================================
   # AIRFLOW - Inicialização do Banco de Dados
   # =============================================================================
   airflow-init:
@@ -480,3 +505,9 @@ volumes:
   ldap-config:
     driver: local
     name: data-platform-ldap-config
+  lam-config:
+    driver: local
+    name: data-platform-lam-config
+  lam-sessions:
+    driver: local
+    name: data-platform-lam-sessions

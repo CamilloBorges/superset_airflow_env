@@ -146,26 +146,45 @@ dc=bomgado,dc=local
 └── ou=services                 # Contas de serviço
 ```
 
-### Acessar phpLDAPadmin
+### Interfaces de Gerenciamento
 
-1. Acesse: https://ldap.bomgado.com.br
-2. Login DN: `cn=admin,dc=bomgado,dc=local`
-3. Password: Use a senha `LDAP_ADMIN_PASSWORD` do arquivo `.env`
-   - **⚠️ NÃO é "admin123"!** A senha é gerada automaticamente e está no `.env`
-   - Exemplo: `otcW5KZIqluJVsvQzYTEk3EkEWRr9g3s`
-   - Consulte o arquivo `.credentials-XXXXXX.txt` gerado durante instalação
-4. **Segurança:** Acesso anônimo está DESABILITADO (autenticação obrigatória)
+#### 🌟 LDAP Account Manager (Recomendado - Interface Simplificada)
+
+**URL:** https://lam.bomgado.com.br (porta 8083)  
+**Usuário:** `cn=admin,dc=bomgado,dc=local`  
+**Senha:** Use `LDAP_ADMIN_PASSWORD` do arquivo `.env`
+
+**Vantagens:**
+- ✅ Interface **muito mais simples** que phpLDAPadmin
+- ✅ Formulários intuitivos para criar usuários
+- ✅ Templates pré-configurados
+- ✅ Self-service (usuários trocam própria senha)
+- ✅ Gestão de grupos visual
+- ✅ Importação CSV em massa
+- ✅ Interface em **Português**
+
+#### 🔧 phpLDAPadmin (Avançado)
+
+**URL:** https://ldap.bomgado.com.br (porta 8082)  
+**Login DN:** `cn=admin,dc=bomgado,dc=local`  
+**Senha:** Use `LDAP_ADMIN_PASSWORD` do arquivo `.env`  
+
+⚠️ **Atenção:** 
+- **NÃO é "admin123"!** A senha é gerada automaticamente
+- Exemplo: `otcW5KZIqluJVsvQzYTEk3EkEWRr9g3s`
+- Consulte `.credentials-XXXXXX.txt` se necessário
+- Acesso anônimo está DESABILITADO (autenticação obrigatória)
 
 ---
 
 ## 👤 Gerenciamento de Usuários
 
-### Método Simplificado (Recomendado) ⚡
+### 🚀 Método 1: Script Automatizado (Mais Rápido)
 
-O jeito mais fácil e rápido de criar usuários é usando o script automatizado:
+O jeito mais rápido via linha de comando:
 
 ```bash
-# Via Make (mais simples)
+# Via Make (recomendado)
 make user
 
 # Ou diretamente
@@ -191,7 +210,26 @@ make test-user-login    # Testa credenciais de login
 
 ---
 
-### Adicionar Novo Usuário (Métodos Alternativos)
+### 🌐 Método 2: LDAP Account Manager (Interface Web Simplificada)
+
+**Ideal para:** Gestores que preferem interface gráfica intuitiva
+
+1. Acesse: https://lam.bomgado.com.br
+2. Login: `cn=admin,dc=bomgado,dc=local`
+3. Senha: do arquivo `.env` (LDAP_ADMIN_PASSWORD)
+4. Na interface:
+   - Clique em **"Users"** → **"New user"**
+   - Preencha o formulário simplificado
+   - Selecione grupo (admins/analysts/viewers)
+   - Salve
+
+**🎯 Muito mais fácil que phpLDAPadmin!**
+
+---
+
+### 🔧 Método 3: phpLDAPadmin (Gestão Avançada)
+
+**Ideal para:** Operações avançadas, debug, estrutura LDAP
 
 **Via phpLDAPadmin (Interface Web):**
 1. Navegue até `ou=users,dc=bomgado,dc=local`

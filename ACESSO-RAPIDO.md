@@ -7,6 +7,7 @@
 | **Superset** | https://bi.bomgado.com.br | http://48.217.81.171:8088 |
 | **Airflow** | https://airflow.bomgado.com.br | http://48.217.81.171:8080 |
 | **Apache Hop** | https://hop.bomgado.com.br | http://48.217.81.171:8081 |
+| **LDAP Account Manager** 🌟 | https://lam.bomgado.com.br | http://48.217.81.171:8083 |
 | **phpLDAPadmin** | https://ldap.bomgado.com.br | http://48.217.81.171:8082 |
 
 ---
@@ -29,7 +30,21 @@ Senha: admin123
 ⚠️  TROQUE após primeiro login!
 ```
 
-### phpLDAPadmin (Gerenciamento LDAP)
+### LDAP Account Manager 🌟 (Gestão Simplificada de Usuários)
+```
+URL: https://lam.bomgado.com.br
+Usuário: cn=admin,dc=bomgado,dc=local
+Senha: otcW5KZIqluJVsvQzYTEk3EkEWRr9g3s
+
+✅ INTERFACE SIMPLIFICADA:
+• Formulários intuitivos para criar usuários
+• Templates pré-configurados
+• Importação CSV em massa
+• Interface em Português
+• MUITO mais fácil que phpLDAPadmin!
+```
+
+### phpLDAPadmin (Gerenciamento LDAP Avançado)
 ```
 URL: https://ldap.bomgado.com.br
 Login DN: cn=admin,dc=bomgado,dc=local
@@ -39,6 +54,7 @@ Senha: otcW5KZIqluJVsvQzYTEk3EkEWRr9g3s
 • NÃO use "admin123" - esta senha NÃO funciona!
 • Use a senha LDAP_ADMIN_PASSWORD do arquivo .env ou .credentials-*.txt
 • Acesso anônimo está DESABILITADO por segurança
+• Use LAM (acima) para gestão simplificada!
 ```
 
 ### Apache Hop (ETL)
@@ -75,7 +91,25 @@ ou=services,dc=bomgado,dc=local  → Contas de serviço
 
 ## 🆕 Como Criar Novo Usuário LDAP
 
-### ⚡ Método Simplificado (Recomendado)
+### 🌐 Método 1: LDAP Account Manager (Interface Web - Mais Fácil!) 🌟
+
+1. Acesse: **https://lam.bomgado.com.br**
+2. Login: `cn=admin,dc=bomgado,dc=local`
+3. Senha: do arquivo `.env` (LDAP_ADMIN_PASSWORD)
+4. Clique em **"Users"** → **"New user"**
+5. Preencha o formulário:
+   - Nome completo
+   - Username (uid)
+   - Email
+   - Senha
+   - Selecione grupo: admins/analysts/viewers
+6. Salve
+
+**✅ Interface em Português, formulários simples, templates prontos!**
+
+---
+
+### ⚡ Método 2: Script Automatizado (Linha de Comando)
 
 **SSH no servidor e execute:**
 ```bash
