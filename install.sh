@@ -173,9 +173,43 @@ echo -e "${GREEN}✓ Imagem superset-custom:latest buildada${NC}"
 rm -f build.log
 
 # =============================================================================
-# 6. INICIAR CONTAINERS
+# 6. INSTALAR CLOUDFLARE TUNNEL (OPCIONAL)
 # =============================================================================
-echo -e "${YELLOW}[6/8] Iniciando containers...${NC}"
+echo -e "${YELLOW}[6/9] Cloudflare Tunnel (HTTPS externo - OPCIONAL)${NC}"
+echo -e "${BLUE}   Deseja instalar Cloudflare Tunnel agora? (y/N)${NC}"
+read -r -t 15 INSTALL_TUNNEL || INSTALL_TUNNEL="n"
+
+if [[ "$INSTALL_TUNNEL" =~ ^[Yy]$ ]]; then
+    echo "   Instalando cloudflared..."
+    
+    # Download e instalação
+    wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
+    dpkg -i /tmp/cloudflared.deb > /dev/null 2>&1
+    rm -f /tmp/cloudflared.deb
+    
+    echo -e "${GREEN}✓ cloudflared instalado${NC}"
+    echo ""
+    echo -e "${BLUE}   Cole o token do Cloudflare Tunnel:${NC}"
+    echo -e "${BLUE}   (Acesse https://one.dash.cloudflare.com → Zero Trust → Networks → Tunnels)${NC}"
+    read -r TUNNEL_TOKEN
+    
+    if [ -n "$TUNNEL_TOKEN" ]; then
+        cloudflared service install "$TUNNEL_TOKEN" > /dev/null 2>&1
+        systemctl start cloudflared
+        systemctl enable cloudflared > /dev/null 2>&1
+        echo -e "${GREEN}✓ Cloudflare Tunnel configurado e ativo${NC}"
+    else
+        echo -e "${YELLOW}⚠ Token vazio. Configure depois com:${NC}"
+        echo -e "${YELLOW}  sudo cloudflared service install <TOKEN>${NC}"
+    fi
+else
+    echo -e "${BLUE}⏭  Pulado. Instale depois com: wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i cloudflared-linux-amd64.deb${NC}"
+fi
+
+# =============================================================================
+# 7. INICIAR CONTAINERS
+# =============================================================================
+echo -e "${YELLOW}[7/9] Iniciando containers...${NC}"
 
 # --quiet-pull suprime output de download, mostra só criação de containers
 docker compose up -d --quiet-pull 2>&1 | grep -E "(Created|Started|Running|Recreated)" || true
@@ -183,9 +217,9 @@ docker compose up -d --quiet-pull 2>&1 | grep -E "(Created|Started|Running|Recre
 echo -e "${GREEN}✓ Containers iniciados${NC}"
 
 # =============================================================================
-# 7. AGUARDAR INICIALIZAÇÃO
+# 8. AGUARDAR INICIALIZAÇÃO
 # =============================================================================
-echo -e "${YELLOW}[7/8] Aguardando inicialização (5-10 min primeira vez)...${NC}"
+echo -e "${YELLOW}[8/9] Aguardando inicialização (5-10 min primeira vez)...${NC}"
 
 # Função de health check
 check_health() {
@@ -231,9 +265,9 @@ for i in {1..120}; do
 done
 
 # =============================================================================
-# 8. VALIDAÇÃO FINAL
+# 9. VALIDAÇÃO FINAL
 # =============================================================================
-echo -e "${YELLOW}[8/8] Validando instalação...${NC}"
+echo -e "${YELLOW}[9/9] Validando instalação...${NC}"
 
 RUNNING=$(docker compose ps --format json 2>/dev/null | jq -r 'select(.State == "running") | .Name' | wc -l)
 echo -e "${GREEN}✓ $RUNNING containers rodando${NC}"
@@ -270,12 +304,35 @@ echo ""
 
 echo -e "${YELLOW}📚 Próximos passos:${NC}"
 echo ""
-echo "  1️⃣  Configure Cloudflare Tunnel para HTTPS externo:"
-echo "     • bi.seudominio.com.br → http://localhost:8088"
-echo "     • airflow.seudominio.com.br → http://localhost:8080"
-echo "     • hop.seudominio.com.br → http://localhost:8081"
-echo "     • ldap.seudominio.com.br → http://localhost:8082"
-echo ""
+
+# Verificar se cloudflared está instalado
+if command -v cloudflared &> /dev/null && systemctl is-active --quiet cloudflared; then
+    echo "  ✅ Cloudflare Tunnel ATIVO"
+    echo ""
+    echo "  🌐 Configure rotas no Dashboard Cloudflare:"
+    echo "     https://one.dash.cloudflare.com → Seu Tunnel → Public Hostnames"
+    echo ""
+    echo "     • bi.seudominio.com → http://localhost:8088"
+    echo "     • airflow.seudominio.com → http://localhost:8080"
+    echo "     • hop.seudominio.com → http://localhost:8081"
+    echo "     • ldap.seudominio.com → http://localhost:8082"
+    echo ""
+elif command -v cloudflared &> /dev/null; then
+    echo "  ⚠️  Cloudflare Tunnel instalado mas NÃO configurado"
+    echo ""
+    echo "  🔧 Configure com:"
+    echo "     sudo cloudflared service install <SEU_TOKEN>"
+    echo "     sudo systemctl start cloudflared"
+    echo ""
+else
+    echo "  1️⃣  Configure Cloudflare Tunnel para HTTPS externo:"
+    echo "     • Instale: wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb"
+    echo "     • sudo dpkg -i cloudflared-linux-amd64.deb"
+    echo "     • sudo cloudflared service install <TOKEN>"
+    echo "     • Configure rotas: bi.seudominio.com.br → http://localhost:8088"
+    echo ""
+fi
+
 echo "  2️⃣  Acesse phpLDAPadmin e crie usuários:"
 echo "     • Navegue até ou=users,dc=bomgado,dc=local"
 echo "     • Create new entry → inetOrgPerson"
