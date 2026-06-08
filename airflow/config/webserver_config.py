@@ -83,24 +83,16 @@ WTF_CSRF_TIME_LIMIT = None
 # SESSION E COOKIES
 # =============================================================================
 
-# Session storage: usar filesystem ao invés de Redis para webserver
-# Redis é usado apenas pelo Celery (broker/backend)
-SESSION_TYPE = 'filesystem'
-SESSION_FILE_DIR = '/tmp/airflow_sessions'
-SESSION_PERMANENT = False
-SESSION_USE_SIGNER = True
+# Chave secreta para assinatura de sessão (obrigatório)
+SECRET_KEY = os.getenv('AIRFLOW__WEBSERVER__SECRET_KEY', 'change_me_secret_key')
 
 # Timeout de sessão: 12 horas
 PERMANENT_SESSION_LIFETIME = 43200
 
-# Configurações de cookies
-SESSION_COOKIE_NAME = 'airflow_session'
+# Configurações de cookies para segurança
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-
-# Chave secreta para assinatura de sessão
-SECRET_KEY = os.getenv('AIRFLOW__WEBSERVER__SECRET_KEY', 'change_me_secret_key')
 
 # Configurações de cookies (Cloudflare Tunnel termina SSL)
 SESSION_COOKIE_HTTPONLY = True
