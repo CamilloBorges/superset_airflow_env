@@ -123,6 +123,14 @@ WTF_CSRF_TIME_LIMIT = None
 SESSION_SERVER_SIDE = True
 
 # =============================================================================
+# RECAPTCHA (Desabilitado)
+# =============================================================================
+
+# ReCAPTCHA não é necessário em ambiente empresarial interno
+RECAPTCHA_PUBLIC_KEY = None
+RECAPTCHA_PRIVATE_KEY = None
+
+# =============================================================================
 # BANCO DE DADOS
 # =============================================================================
 
