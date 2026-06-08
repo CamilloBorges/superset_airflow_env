@@ -1,594 +1,546 @@
 # Guia de Instalação - Plataforma de Dados
 
-Instalação completa em servidor Ubuntu limpo até ambiente de produção funcionando.
+Este guia detalha a instalação completa em um **servidor Ubuntu zerado**.
 
-**Tempo total**: 20-30 minutos  
-**Dificuldade**: Intermediária  
-**Pré-requisitos**: VM Ubuntu + Conta Azure + Cloudflare
+## 📋 Pré-requisitos
 
----
+### Hardware Mínimo
+- **CPU**: 4 cores
+- **RAM**: 8GB (16GB recomendado para produção)
+- **Disco**: 50GB SSD
 
-## 📋 Checklist Pré-instalação
+### Software
+- **Ubuntu**: 24.04 LTS ou 22.04 LTS (fresh install)
+- **Acesso**: SSH com sudo/root
+- **Internet**: Conexão estável
 
-Antes de começar, tenha em mãos:
-
-- [ ] **VM Azure criada**
-  - Ubuntu 24.04 LTS (ou 22.04)
-  - Standard_B2ms ou superior (2 vCPU, 8GB RAM)
-  - 30GB disco Premium SSD
-  - IP público (para SSH inicial)
-  - Porta 22 liberada
-
-- [ ] **Azure Entra ID configurado**
-  - Tenant ID anotado
-  - 2 App Registrations criados (Superset + Airflow)
-  - Client IDs anotados
-  - Client Secrets gerados e anotados
-  - Redirect URIs configurados
-
-- [ ] **Cloudflare configurado**
-  - Domínio adicionado ao Cloudflare
-  - Tunnel criado
-  - Token do tunnel copiado
-  - DNS apontando para tunnel
+### Opcional (para HTTPS externo)
+- Domínio próprio
+- Conta Cloudflare (gratuita)
+- Cloudflare Tunnel configurado
 
 ---
 
 ## 🚀 Instalação Automatizada (Recomendado)
 
-### Passo 1: Conectar à VM
+### 1. Clonar Repositório
 
 ```bash
-# Do seu computador local
-ssh azureuser@<IP_PUBLICO_VM>
-```
+# SSH no servidor
+ssh user@your-server-ip
 
-### Passo 2: Atualizar Sistema
-
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-### Passo 3: Instalar Docker e Docker Compose
-
-```bash
-# Instalar Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Adicionar usuário ao grupo docker
-sudo usermod -aG docker $USER
-
-# Aplicar mudanças de grupo
-newgrp docker
-
-# Verificar instalação
-docker --version
-docker compose version
-```
-
-### Passo 4: Instalar Cloudflare Tunnel
-
-```bash
-# Download cloudflared
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-
-# Instalar
-sudo dpkg -i cloudflared-linux-amd64.deb
-
-# Configurar tunnel (substitua <TOKEN> pelo seu token)
-sudo cloudflared service install <TOKEN_DO_CLOUDFLARE>
-
-# Iniciar e habilitar
-sudo systemctl start cloudflared
-sudo systemctl enable cloudflared
-
-# Verificar status
-sudo systemctl status cloudflared
-```
-
-### Passo 5: Clonar Repositório
-
-```bash
-cd ~
+# Clonar repositório
 git clone https://github.com/CamilloBorges/superset_airflow_env.git data-platform
 cd data-platform
 ```
 
-### Passo 6: Configurar Variáveis de Ambiente
+### 2. Executar Script de Instalação
 
 ```bash
-# Copiar template
-cp .env.example .env
-
-# Editar com seus valores
-nano .env
+sudo bash install.sh
 ```
 
-**Edite as seguintes variáveis:**
+**O script irá:**
+- Atualizar sistema Ubuntu
+- Instalar Docker Engine + Compose V2
+- Gerar secrets fortes automaticamente
+- Criar estrutura de diretórios
+- Buildar imagem customizada do Superset
+- Inicializar todos os containers
+- Aguardar serviços ficarem healthy
+
+**Tempo estimado**: 15-20 minutos (primeira execução)
+
+### 3. Verificar Instalação
 
 ```bash
-# Domínio (seu domínio Cloudflare)
-PUBLIC_DOMAIN=bi.bomgado.com.br
-
-# Azure Tenant ID
-AZURE_TENANT_ID=0ffb4bbd-7ce2-4e66-b35b-633c7d4ef035
-
-# Superset App Registration
-AZURE_SUPERSET_CLIENT_ID=<seu-superset-client-id>
-AZURE_SUPERSET_CLIENT_SECRET=<seu-superset-client-secret>
-
-# Airflow App Registration
-AZURE_AIRFLOW_CLIENT_ID=<seu-airflow-client-id>
-AZURE_AIRFLOW_CLIENT_SECRET=<seu-airflow-client-secret>
-```
-
-**Gerar secrets fortes:**
-
-```bash
-# Gerar senhas seguras (se quiser trocar as padrões)
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-Salve e feche (Ctrl+O, Enter, Ctrl+X).
-
-### Passo 7: Build e Deploy
-
-```bash
-# Build da imagem customizada do Superset
-docker compose build superset-init
-
-# Iniciar infraestrutura base
-docker compose up -d postgres redis
-
-# Aguardar PostgreSQL ficar healthy (30 segundos)
-sleep 30
-
-# Verificar se PostgreSQL está saudável
-docker compose ps postgres
-
-# Inicializar bancos de dados
-docker compose up -d airflow-init superset-init
-
-# Aguardar migrations (60 segundos)
-sleep 60
-
-# Subir todos os serviços
-docker compose up -d
-
-# Verificar status
+# Ver status
 docker compose ps
+
+# Ver logs
+docker compose logs -f
 ```
 
-**Resultado esperado:**
-
-```
-NAME                STATUS              HEALTH
-airflow-scheduler   Up X seconds        healthy
-airflow-triggerer   Up X seconds        healthy
-airflow-webserver   Up X seconds        healthy
-airflow-worker      Up X seconds        healthy
-hop                 Up X seconds        healthy
-nginx               Up X seconds        healthy
-postgres            Up X seconds        healthy
-redis               Up X seconds        healthy
-superset            Up X seconds        healthy
-superset-beat       Up X seconds        
-superset-worker     Up X seconds        healthy
-```
-
-### Passo 8: Verificar Logs
-
-```bash
-# Ver logs do Superset
-docker compose logs superset --tail 50
-
-# Verificar se configuração foi carregada
-docker compose logs superset | grep "Configurações customizadas"
-
-# Ver logs do Airflow
-docker compose logs airflow-webserver --tail 50
-```
-
-Você deve ver:
-- `✓ Configurações customizadas do Superset carregadas com sucesso!`
-- Nenhum erro relacionado a OAuth ou Redis
-- Serviços marcados como "healthy"
-
-### Passo 9: Configurar Cloudflare Tunnel Routes
-
-No **Cloudflare Dashboard**:
-
-1. Acesse seu tunnel
-2. Adicione Public Hostnames:
-
-**Superset:**
-- Subdomain: `bi` (ou deixe vazio para root)
-- Domain: `bomgado.com.br`
-- Type: `HTTP`
-- URL: `nginx:80`
-
-**Airflow:**
-- Subdomain: `airflow`
-- Domain: `bomgado.com.br`
-- Type: `HTTP`
-- URL: `nginx:8080`
-
-**Hop:**
-- Subdomain: `hop`
-- Domain: `bomgado.com.br`
-- Type: `HTTP`
-- URL: `nginx:8081`
-
-### Passo 10: Testar Acesso
-
-1. **Abra navegador** em modo anônimo (cookies limpos)
-2. **Acesse**: https://bi.bomgado.com.br
-3. **Resultado esperado**:
-   - Redirecionamento para `/login/`
-   - Botão "Sign in with Microsoft"
-4. **Clique** em "Sign in with Microsoft"
-5. **Faça login** com sua conta Azure
-6. **Confirme**: Usuário criado automaticamente, acesso aos dashboards
-
-Repita para:
-- https://airflow.bomgado.com.br
-- https://hop.bomgado.com.br (se configurado OAuth)
+**Todos os containers devem estar `healthy`**:
+- ✅ openldap
+- ✅ postgres
+- ✅ redis
+- ✅ superset
+- ✅ airflow-webserver
+- ✅ airflow-scheduler
+- ✅ hop-server
+- ✅ phpldapadmin
 
 ---
 
-## ✅ Validação da Instalação
+## 🔧 Instalação Manual (Passo a Passo)
 
-### 1. Verificar Containers
+Se preferir controle total sobre cada etapa:
 
+### 1. Atualizar Sistema
+
+```bash
+sudo apt-get update
+sudo apt-get upgrade -y
+sudo apt-get install -y curl wget git jq python3 python3-pip
+```
+
+### 2. Instalar Docker
+
+```bash
+# Remover versões antigas
+sudo apt-get remove docker docker-engine docker.io containerd runc
+
+# Adicionar repositório Docker
+sudo apt-get install ca-certificates curl gnupg lsb-release
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+
+# Verificar
+docker --version
+docker compose version
+```
+
+### 3. Configurar Ambiente
+
+```bash
+# Clonar repositório
+git clone https://github.com/CamilloBorges/superset_airflow_env.git data-platform
+cd data-platform
+
+# Copiar .env
+cp .env.example .env
+
+# Gerar secrets
+python3 generate_secrets.py
+```
+
+### 4. Editar .env (IMPORTANTE!)
+
+```bash
+nano .env
+```
+
+**Configurações obrigatórias:**
+
+```bash
+# LDAP - Defina senhas fortes!
+LDAP_ADMIN_PASSWORD=SuaSenhaForteAqui123!
+LDAP_CONFIG_PASSWORD=SenhaConfigForte456!
+LDAP_READONLY_PASSWORD=SenhaReadOnly789!
+
+# PostgreSQL
+POSTGRES_PASSWORD=SenhaPostgresForte!
+POSTGRES_PASSWORD_URLENCODED=SenhaPostgresForte!  # ou URL-encoded se tiver caracteres especiais
+
+# Redis
+REDIS_PASSWORD=SenhaRedisForte!
+
+# Secrets já gerados por generate_secrets.py
+SUPERSET_SECRET_KEY=... # já preenchido
+AIRFLOW__CORE__FERNET_KEY=... # já preenchido
+AIRFLOW__WEBSERVER__SECRET_KEY=... # já preenchido
+```
+
+**Trocar @, :, / em senhas PostgreSQL:**
+```bash
+# Se senha contém @ encode como %40
+# Senha original: Pass@123 → URL-encoded: Pass%40123
+POSTGRES_PASSWORD=Pass@123
+POSTGRES_PASSWORD_URLENCODED=Pass%40123
+```
+
+### 5. Build e Iniciar
+
+```bash
+# Build imagem Superset customizada
+docker compose build superset-init
+
+# Iniciar todos os serviços
+docker compose up -d
+
+# Acompanhar logs
+docker compose logs -f
+```
+
+### 6. Aguardar Inicialização
+
+**Primeira execução pode levar 10 minutos:**
+- OpenLDAP: ~30s
+- PostgreSQL: ~20s
+- Redis: ~10s
+- Superset init: ~2 min
+- Airflow init: ~2 min
+- Superset: ~3 min
+- Airflow: ~3 min
+
+Verificar health:
 ```bash
 docker compose ps
 ```
 
-Todos devem estar **Up** e **healthy**.
+---
 
-### 2. Verificar Conectividade
+## 🔐 Configuração Pós-Instalação
+
+### 1. Acessar phpLDAPadmin
+
+**URL**: http://SERVER_IP:8082
+
+**Login:**
+- Login DN: `cn=admin,dc=bomgado,dc=local`
+- Password: `LDAP_ADMIN_PASSWORD` (do .env)
+
+### 2. Criar Usuários LDAP
+
+**Via phpLDAPadmin (Interface Web):**
+
+1. Navegue até `ou=users,dc=bomgado,dc=local`
+2. Click **Create new entry** → **inetOrgPerson**
+3. Preencha:
+   - **CN** (Common Name): Nome completo (ex: João Silva)
+   - **SN** (Surname): Sobrenome (ex: Silva)
+   - **UID**: Username para login (ex: joao.silva)
+   - **Mail**: Email (ex: joao.silva@empresa.com.br)
+   - **Given Name**: Primeiro nome (ex: João)
+   - **User Password**: Senha (será criptografada)
+4. Click **Add objectClass** → **posixAccount**
+5. Adicionar campos POSIX:
+   - **uidNumber**: Número único (ex: 10001, 10002, 10003...)
+   - **gidNumber**: 10000 (grupo padrão)
+   - **homeDirectory**: /home/joao.silva
+   - **loginShell**: /bin/bash
+6. Click **Create Object**
+
+**Via Linha de Comando:**
 
 ```bash
-# Superset local
-curl -I http://localhost:8088/health
+# Criar arquivo user.ldif
+cat > user.ldif <<EOF
+dn: cn=João Silva,ou=users,dc=bomgado,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: João Silva
+sn: Silva
+givenName: João
+uid: joao.silva
+uidNumber: 10001
+gidNumber: 10000
+homeDirectory: /home/joao.silva
+loginShell: /bin/bash
+mail: joao.silva@empresa.com.br
+userPassword: senha_temporaria_123
+EOF
 
-# Airflow local
-curl -I http://localhost:8080/health
+# Adicionar ao LDAP
+cat user.ldif | docker exec -i openldap ldapadd -x \
+  -D "cn=admin,dc=bomgado,dc=local" \
+  -w "${LDAP_ADMIN_PASSWORD}"
+```
+
+### 3. Adicionar Usuário a Grupo
+
+```bash
+# Adicionar João ao grupo analysts
+cat > add_to_group.ldif <<EOF
+dn: cn=analysts,ou=groups,dc=bomgado,dc=local
+changetype: modify
+add: member
+member: cn=João Silva,ou=users,dc=bomgado,dc=local
+EOF
+
+cat add_to_group.ldif | docker exec -i openldap ldapmodify -x \
+  -D "cn=admin,dc=bomgado,dc=local" \
+  -w "${LDAP_ADMIN_PASSWORD}"
+```
+
+### 4. Testar Login
+
+**Superset**: http://SERVER_IP:8088
+- Username: `joao.silva` (uid do LDAP)
+- Password: senha definida
+
+**Airflow**: http://SERVER_IP:8080
+- Username: `joao.silva`
+- Password: senha definida
+
+---
+
+## 🌐 Configurar Cloudflare Tunnel (HTTPS Externo)
+
+### 1. Instalar cloudflared
+
+```bash
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+```
+
+### 2. Criar Tunnel no Dashboard
+
+1. Acesse: https://one.dash.cloudflare.com
+2. Zero Trust → Networks → Tunnels
+3. **Create a tunnel**
+4. Nome: `data-platform`
+5. Copie o **token** gerado
+
+### 3. Instalar como Serviço
+
+```bash
+sudo cloudflared service install <TOKEN_COPIADO>
+```
+
+### 4. Configurar Rotas (config.yml)
+
+```bash
+sudo nano /root/.cloudflared/config.yml
+```
+
+```yaml
+tunnel: <TUNNEL_ID>
+credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # Superset
+  - hostname: bi.seudominio.com.br
+    service: http://localhost:8088
+    
+  # Airflow
+  - hostname: airflow.seudominio.com.br
+    service: http://localhost:8080
+    
+  # Hop
+  - hostname: hop.seudominio.com.br
+    service: http://localhost:8081
+    
+  # phpLDAPadmin
+  - hostname: ldap.seudominio.com.br
+    service: http://localhost:8082
+  
+  # Catch-all (obrigatório)
+  - service: http_status:404
+```
+
+### 5. Iniciar Tunnel
+
+```bash
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+sudo systemctl status cloudflared
+```
+
+### 6. Adicionar DNS no Cloudflare
+
+No dashboard do Tunnel, adicionar rotas públicas:
+- `bi.seudominio.com.br`
+- `airflow.seudominio.com.br`
+- `hop.seudominio.com.br`
+- `ldap.seudominio.com.br`
+
+**Pronto!** Acesse via HTTPS com certificado Cloudflare automático.
+
+---
+
+## 🔒 Hardening de Segurança
+
+### 1. Trocar Senhas Padrão
+
+```bash
+# Editar .env
+nano .env
+
+# Trocar:
+LDAP_ADMIN_PASSWORD=...
+POSTGRES_PASSWORD=...
+REDIS_PASSWORD=...
+
+# Restart
+docker compose down
+docker compose up -d
+```
+
+### 2. Trocar Senha LDAP admin (uid: admin)
+
+**Via phpLDAPadmin:**
+1. Navegue até `cn=admin,ou=users,dc=bomgado,dc=local`
+2. Click **userPassword**
+3. Trocar `admin123` por senha forte
+
+### 3. Configurar Firewall
+
+```bash
+# Instalar ufw
+sudo apt-get install -y ufw
+
+# Permitir SSH
+sudo ufw allow 22/tcp
+
+# Permitir apenas localhost para serviços (se usar Cloudflare Tunnel)
+# Não abrir portas 8080, 8081, 8082, 8088 publicamente
+
+# Habilitar
+sudo ufw enable
+```
+
+### 4. Backup Automatizado
+
+```bash
+#!/bin/bash
+# backup.sh - Executar via cron diariamente
+
+BACKUP_DIR="/backups/data-platform/$(date +%Y%m%d)"
+mkdir -p "$BACKUP_DIR"
 
 # PostgreSQL
-docker compose exec postgres pg_isready -U dataplatform
+docker exec postgres pg_dumpall -U dataplatform | gzip > "$BACKUP_DIR/postgres.sql.gz"
 
-# Redis
-docker compose exec redis redis-cli -a $REDIS_PASSWORD ping
+# LDAP
+docker exec openldap slapcat -n 1 | gzip > "$BACKUP_DIR/ldap.ldif.gz"
+
+# Volumes
+docker run --rm -v data-platform-postgres:/data -v "$BACKUP_DIR":/backup \
+  alpine tar czf /backup/postgres-volume.tar.gz -C /data .
+
+# Reter 30 dias
+find /backups/data-platform -type d -mtime +30 -exec rm -rf {} \;
 ```
 
-### 3. Verificar Logs sem Erros
+Agendar:
+```bash
+sudo crontab -e
+# Adicionar:
+0 2 * * * /root/data-platform/backup.sh
+```
+
+---
+
+## 🛠️ Comandos Úteis
 
 ```bash
-# Buscar erros nos logs
-docker compose logs | grep -i error | grep -v "404"
-docker compose logs | grep -i "critical\|fatal"
+# Ver status
+docker compose ps
+
+# Logs
+docker compose logs -f [serviço]
+
+# Restart serviço
+docker compose restart superset
+
+# Parar tudo
+docker compose down
+
+# Parar e remover volumes (CUIDADO!)
+docker compose down -v
+
+# Shell container
+docker exec -it superset bash
+
+# Backup LDAP
+docker exec openldap slapcat -n 1 > ldap_backup.ldif
+
+# Testar LDAP
+docker exec openldap ldapsearch -x -b "dc=bomgado,dc=local" \
+  -D "cn=admin,dc=bomgado,dc=local" -w "senha"
 ```
-
-Não deve haver erros críticos.
-
-### 4. Verificar OAuth
-
-```bash
-# Verificar se variáveis Azure estão carregadas
-docker compose exec superset env | grep AZURE
-
-# Deve mostrar:
-# AZURE_TENANT_ID=...
-# AZURE_SUPERSET_CLIENT_ID=...
-# AZURE_SUPERSET_CLIENT_SECRET=... (parcial)
-```
-
-### 5. Verificar Redis Session
-
-```bash
-# Conectar ao Redis e verificar sessões
-docker compose exec redis redis-cli -a $REDIS_PASSWORD
-
-# No prompt do Redis:
-> KEYS superset:*
-> KEYS session:*
-> exit
-```
-
-Deve haver chaves de sessão quando alguém fizer login.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### OAuth "State not equal" Error
-
-**Sintomas**: Login OAuth falha com erro "CSRF Warning! State not equal"
-
-**Causa**: Sessão Redis não configurada corretamente
-
-**Solução**:
-```bash
-# 1. Verificar logs
-docker compose logs superset | grep -i "session\|redis"
-
-# 2. Verificar se Redis está acessível
-docker compose exec superset /app/.venv/bin/python -c "
-from redis import Redis
-import os
-r = Redis(
-    host=os.getenv('REDIS_HOST'),
-    port=int(os.getenv('REDIS_PORT')),
-    password=os.getenv('REDIS_PASSWORD'),
-    db=0
-)
-print('Redis PING:', r.ping())
-"
-
-# 3. Se falhar, verificar senha
-docker compose exec superset env | grep REDIS
-
-# 4. Reiniciar Superset
-docker compose restart superset
-```
-
-### Containers não ficam Healthy
-
-**Sintomas**: `docker compose ps` mostra containers sem (healthy)
-
-**Solução**:
-```bash
-# 1. Ver logs do container específico
-docker compose logs <container_name>
-
-# 2. Verificar dependências
-docker compose logs postgres
-docker compose logs redis
-
-# 3. Reiniciar na ordem correta
-docker compose down
-docker compose up -d postgres redis
-sleep 30
-docker compose up -d
-```
-
-### Migrations Falhando
-
-**Sintomas**: airflow-init ou superset-init com exit code 1
-
-**Airflow**:
-```bash
-# Reiniciar migrations
-docker compose down airflow-init
-docker compose up -d airflow-init
-docker compose logs airflow-init
-```
-
-**Superset**:
-```bash
-# Executar manualmente
-docker compose exec superset superset db upgrade
-docker compose exec superset superset init
-```
-
-### Cloudflare Tunnel não Conecta
-
-**Sintomas**: Erro 502 ou 504 ao acessar domínio
-
-**Solução**:
-```bash
-# 1. Verificar status do cloudflared
-sudo systemctl status cloudflared
-
-# 2. Ver logs
-sudo journalctl -u cloudflared -n 50
-
-# 3. Se não estiver rodando, reiniciar
-sudo systemctl restart cloudflared
-
-# 4. Verificar se Nginx está ouvindo
-docker compose exec nginx nginx -t
-docker compose ps nginx
-```
-
-### Nginx 502 Bad Gateway
-
-**Sintomas**: Cloudflare conecta mas retorna 502
-
-**Solução**:
-```bash
-# 1. Verificar se backend está UP
-docker compose ps superset airflow-webserver hop
-
-# 2. Verificar logs do Nginx
-docker compose logs nginx
-
-# 3. Testar conectividade interna
-docker compose exec nginx curl -I http://superset:8088/health
-docker compose exec nginx curl -I http://airflow-webserver:8080/health
-
-# 4. Reiniciar Nginx
-docker compose restart nginx
-```
-
----
-
-## 🔄 Atualizações
-
-### Atualizar Código (sem perder dados)
+### Container não inicia
 
 ```bash
-cd ~/data-platform
-git pull
-docker compose build superset-init
-docker compose up -d
-```
+# Ver logs
+docker compose logs [container]
 
-### Atualizar Versões
-
-**Superset**:
-```dockerfile
-# Editar superset/Dockerfile
-FROM apache/superset:6.2.0  # Nova versão
-```
-
-**Airflow**:
-```yaml
-# Editar docker-compose.yml
-image: apache/airflow:2.9.0-python3.11  # Nova versão
-```
-
-Depois:
-```bash
-docker compose build
-docker compose down
-docker compose up -d
-```
-
----
-
-## 💾 Backup e Restore
-
-### Backup
-
-```bash
-# Criar diretório de backup
-mkdir -p ~/backups
-
-# Backup PostgreSQL
-docker compose exec postgres pg_dump -U dataplatform superset_db > ~/backups/superset_$(date +%Y%m%d).sql
-docker compose exec postgres pg_dump -U dataplatform airflow_db > ~/backups/airflow_$(date +%Y%m%d).sql
-
-# Backup volumes (alternativa)
-docker compose down
-sudo tar -czf ~/backups/volumes_$(date +%Y%m%d).tar.gz /var/lib/docker/volumes/data-platform_*
-docker compose up -d
-```
-
-### Restore
-
-```bash
-# Restore PostgreSQL
-cat ~/backups/superset_20260606.sql | docker compose exec -T postgres psql -U dataplatform superset_db
-cat ~/backups/airflow_20260606.sql | docker compose exec -T postgres psql -U dataplatform airflow_db
-
-# Restart serviços
-docker compose restart
-```
-
----
-
-## 🔐 Gestão de Usuários
-
-### Adicionar Admin Manualmente
-
-**Superset**:
-```bash
-docker compose exec superset superset fab create-admin \
-    --username admin \
-    --firstname Admin \
-    --lastname User \
-    --email admin@bomgado.com.br \
-    --password <senha_forte>
-```
-
-**Airflow**:
-```bash
-docker compose exec airflow-webserver airflow users create \
-    --username admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
-    --email admin@bomgado.com.br \
-    --password <senha_forte>
-```
-
-### Listar Usuários
-
-**Superset**:
-```bash
-docker compose exec superset superset fab list-users
-```
-
-**Airflow**:
-```bash
-docker compose exec airflow-webserver airflow users list
-```
-
-### Elevar Permissões de Usuário SSO
-
-1. Faça login como admin na interface web
-2. Acesse Settings → List Users
-3. Encontre o usuário
-4. Edit → Role → Selecione novo role (Admin/Alpha)
-5. Save
-
----
-
-## 📊 Monitoramento
-
-### Ver Uso de Recursos
-
-```bash
-# Uso de CPU/Memória por container
+# Verificar recursos
 docker stats
 
-# Tamanho de volumes
-docker system df -v
-
-# Espaço em disco
-df -h
+# Reiniciar
+docker compose restart [container]
 ```
 
-### Logs Contínuos
+### LDAP "Invalid credentials"
 
 ```bash
-# Seguir logs de múltiplos serviços
-docker compose logs -f superset airflow-webserver
+# Verificar LDAP está rodando
+docker compose ps openldap
 
-# Filtrar por erro
-docker compose logs -f | grep -i error
+# Testar bind
+docker exec openldap ldapwhoami -x \
+  -D "cn=admin,dc=bomgado,dc=local" -w "${LDAP_ADMIN_PASSWORD}"
 ```
 
-### Healthchecks
+### Superset/Airflow não conecta LDAP
 
 ```bash
-# Status rápido
-docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
+# Ping de superset para openldap
+docker exec superset ping openldap
 
-# Healthcheck manual
-curl http://localhost:8088/health
-curl http://localhost:8080/health
+# Verificar env vars
+docker exec superset env | grep LDAP
+```
+
+### PostgreSQL conexão recusada
+
+```bash
+# Health check
+docker inspect postgres --format='{{.State.Health.Status}}'
+
+# Conectar manualmente
+docker exec -it postgres psql -U dataplatform -d superset_db
 ```
 
 ---
 
-## 🎯 Próximos Passos
+## 📊 Arquitetura Final
 
-Após instalação bem-sucedida:
-
-1. **Elevar primeiro usuário a Admin** via interface web
-2. **Configurar conexões de banco de dados** no Superset
-3. **Criar primeira DAG** no Airflow
-4. **Importar projetos Hop** (se aplicável)
-5. **Configurar alertas** (opcional)
-6. **Setup de backup automatizado**
+```
+Internet (HTTPS)
+    ↓
+Cloudflare Tunnel (TLS termination)
+    ↓ http://localhost:8088/8080/8081/8082
+┌──────────────┬──────────────┬──────────────┬───────────────┐
+│  Superset    │  Airflow     │  Hop         │ phpLDAPadmin │
+│  :8088       │  :8080       │  :8081       │  :8082       │
+└──────┬───────┴──────┬───────┴──────┬───────┴───────┬───────┘
+       │              │              │               │
+       └──────────────┴──────────────┴───────────────┘
+                      ↓                    ↓
+               ┌─────────────┐      ┌──────────┐
+               │ PostgreSQL  │      │  Redis   │
+               │    :5432    │      │  :6379   │
+               └─────────────┘      └──────────┘
+                      ↑
+               ┌─────────────┐
+               │  OpenLDAP   │  ← Autenticação Unificada
+               │    :389     │
+               └─────────────┘
+```
 
 ---
 
-## 📞 Suporte
+## 📚 Referências
 
-**Problema não resolvido?**
-
-1. Verifique logs detalhados: `docker compose logs > debug.log`
-2. Revise checklist de pré-requisitos
-3. Consulte [SETUP_DO_ZERO.md](SETUP_DO_ZERO.md) para análise técnica
-4. Abra issue no GitHub com logs
+- [Apache Superset](https://superset.apache.org/docs/intro)
+- [Apache Airflow](https://airflow.apache.org/docs/)
+- [Apache Hop](https://hop.apache.org/manual/latest/)
+- [OpenLDAP](https://www.openldap.org/doc/admin24/)
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
 
 ---
 
-**Versão**: 2.0  
-**Última atualização**: 2026-06-06  
-**Testado em**: Ubuntu 24.04 LTS
+## 🆘 Suporte
+
+Problemas? Abra uma [issue](https://github.com/CamilloBorges/superset_airflow_env/issues) ou consulte README.md.

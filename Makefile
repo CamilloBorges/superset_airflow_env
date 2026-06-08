@@ -36,7 +36,7 @@ setup: ## Configuração inicial completa do ambiente
 	@if [ ! -f .env ]; then \
 		echo "$(YELLOW)Copiando .env.example para .env...$(NC)"; \
 		cp .env.example .env; \
-		echo "$(RED)ATENÇÃO: Edite o arquivo .env com suas credenciais!$(NC)"; \
+		echo "$(RED)ATENÇÃO: Edite o arquivo .env com suas credenciais LDAP!$(NC)"; \
 	else \
 		echo "$(GREEN)Arquivo .env já existe.$(NC)"; \
 	fi
@@ -45,6 +45,7 @@ setup: ## Configuração inicial completa do ambiente
 	@mkdir -p superset/config superset/data
 	@mkdir -p hop/config hop/projects hop/metadata
 	@mkdir -p postgres/init-scripts shared/data
+	@mkdir -p ldap
 	@echo "$(GREEN)✓ Configuração concluída!$(NC)"
 	@echo "$(YELLOW)Próximo passo: Execute 'make secrets' para gerar chaves de segurança$(NC)"
 
@@ -58,9 +59,14 @@ up: ## Inicia todos os serviços
 	@echo "$(GREEN)✓ Serviços iniciados!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Acesse:$(NC)"
-	@echo "  - Airflow:  http://localhost:8080"
-	@echo "  - Superset: http://localhost:8088"
-	@echo "  - Hop:      http://localhost:8081"
+	@echo "  - Superset:     http://localhost:8088"
+	@echo "  - Airflow:      http://localhost:8080"
+	@echo "  - Hop:          http://localhost:8081"
+	@echo "  - phpLDAPadmin: http://localhost:8082"
+	@echo ""
+	@echo "$(YELLOW)Login padrão LDAP:$(NC)"
+	@echo "  - Username: admin"
+	@echo "  - Password: (definido em LDAP_ADMIN_PASSWORD no .env)"
 
 down: ## Para todos os serviços
 	@echo "$(YELLOW)Parando serviços...$(NC)"

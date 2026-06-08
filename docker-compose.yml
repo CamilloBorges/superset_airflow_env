@@ -1,3 +1,23 @@
+# =============================================================================
+# Plataforma de Dados Empresarial - Docker Compose
+# =============================================================================
+# Ambiente completo de Business Intelligence e Engenharia de Dados:
+#
+# - Apache Superset 6.1.0 - Visualização e BI  
+# - Apache Airflow 2.8.0 - Orquestração de workflows
+# - Apache Hop 2.7.0 - ETL/ELT
+# - PostgreSQL 15 - Banco de metadados
+# - Redis 7 - Cache e message broker
+# - OpenLDAP - Autenticação unificada
+# - phpLDAPadmin - Interface web para gerenciar LDAP
+#
+# Acesso via Cloudflare Tunnel (HTTPS):
+# - bi.bomgado.com.br → Superset (porta 8088)
+# - airflow.bomgado.com.br → Airflow (porta 8080)
+# - hop.bomgado.com.br → Hop (porta 8081)
+# - ldap.bomgado.com.br → phpLDAPadmin (porta 8082)
+# =============================================================================
+
 x-airflow-common: &airflow-common
   image: apache/airflow:2.8.0-python3.11
   environment:
@@ -16,10 +36,13 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__CONFIG_FILE: /opt/airflow/config/webserver_config.py
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW_UID: ${AIRFLOW_UID}
-    AZURE_AIRFLOW_CLIENT_ID: ${AZURE_AIRFLOW_CLIENT_ID}
-    AZURE_AIRFLOW_CLIENT_SECRET: ${AZURE_AIRFLOW_CLIENT_SECRET}
-    AZURE_TENANT_ID: ${AZURE_TENANT_ID}
     TZ: ${TIMEZONE}
+    # Configurações LDAP
+    LDAP_HOST: ${LDAP_HOST}
+    LDAP_PORT: ${LDAP_PORT}
+    LDAP_BASE_DN: ${LDAP_BASE_DN}
+    LDAP_BIND_DN: ${LDAP_BIND_DN}
+    LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -59,7 +82,7 @@ services:
     restart: unless-stopped
 
   # =============================================================================
-  # REDIS - Message Broker
+  # REDIS - Message Broker e Cache
   # =============================================================================
   redis:
     image: redis:7-alpine
@@ -75,6 +98,57 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    networks:
+      - data-platform-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # OPENLDAP - Servidor de Autenticação Unificada
+  # =============================================================================
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    environment:
+      LDAP_ORGANISATION: ${LDAP_ORGANISATION}
+      LDAP_DOMAIN: ${LDAP_DOMAIN}
+      LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      LDAP_CONFIG_PASSWORD: ${LDAP_CONFIG_PASSWORD}
+      LDAP_READONLY_USER: "true"
+      LDAP_READONLY_USER_USERNAME: ${LDAP_READONLY_USER}
+      LDAP_READONLY_USER_PASSWORD: ${LDAP_READONLY_PASSWORD}
+      LDAP_TLS: "false"  # Cloudflare Tunnel gerencia TLS
+      TZ: ${TIMEZONE}
+    volumes:
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+      - ./ldap/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/bootstrap.ldif
+    ports:
+      - "${LDAP_EXTERNAL_PORT}:389"
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b ${LDAP_BASE_DN} -D ${LDAP_BIND_DN} -w ${LDAP_ADMIN_PASSWORD} -s base > /dev/null 2>&1 && exit 0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - data-platform-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # PHPLDAPADMIN - Interface Web para Gerenciar LDAP
+  # =============================================================================
+  phpldapadmin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: phpldapadmin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: openldap
+      PHPLDAPADMIN_HTTPS: "false"  # Cloudflare Tunnel gerencia HTTPS
+      TZ: ${TIMEZONE}
+    ports:
+      - "${LDAP_ADMIN_EXTERNAL_PORT}:80"
+    depends_on:
+      openldap:
+        condition: service_healthy
     networks:
       - data-platform-network
     restart: unless-stopped
@@ -100,6 +174,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      openldap:
         condition: service_healthy
     restart: "no"
 
@@ -204,6 +280,12 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Configurações LDAP
+      LDAP_HOST: ${LDAP_HOST}
+      LDAP_PORT: ${LDAP_PORT}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      LDAP_BIND_DN: ${LDAP_BIND_DN}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
       TZ: ${TIMEZONE}
     command: >
       bash -c "
@@ -220,6 +302,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      openldap:
         condition: service_healthy
     networks:
       - data-platform-network
@@ -246,9 +330,12 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      AZURE_SUPERSET_CLIENT_ID: ${AZURE_SUPERSET_CLIENT_ID}
-      AZURE_SUPERSET_CLIENT_SECRET: ${AZURE_SUPERSET_CLIENT_SECRET}
-      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      # Configurações LDAP
+      LDAP_HOST: ${LDAP_HOST}
+      LDAP_PORT: ${LDAP_PORT}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      LDAP_BIND_DN: ${LDAP_BIND_DN}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
       TZ: ${TIMEZONE}
     ports:
       - "${SUPERSET_EXTERNAL_PORT}:8088"
@@ -288,9 +375,6 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      AZURE_SUPERSET_CLIENT_ID: ${AZURE_SUPERSET_CLIENT_ID}
-      AZURE_SUPERSET_CLIENT_SECRET: ${AZURE_SUPERSET_CLIENT_SECRET}
-      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
       TZ: ${TIMEZONE}
     depends_on:
       superset-init:
@@ -328,9 +412,6 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      AZURE_SUPERSET_CLIENT_ID: ${AZURE_SUPERSET_CLIENT_ID}
-      AZURE_SUPERSET_CLIENT_SECRET: ${AZURE_SUPERSET_CLIENT_SECRET}
-      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
       TZ: ${TIMEZONE}
     depends_on:
       superset-init:
@@ -375,31 +456,6 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # =============================================================================
-  # NGINX - Reverse Proxy (HTTP local para Cloudflare Tunnel)
-  # =============================================================================
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    ports:
-      - "80:80"       # Superset - Cloudflare Tunnel connects to localhost:80
-      # Note: Ports 8080 (Airflow) and 8081 (Hop) exposed directly by respective containers
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - superset
-      - airflow-webserver
-      - hop-server
-    networks:
-      - data-platform-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
 # =============================================================================
 # NETWORKS
 # =============================================================================
@@ -413,4 +469,11 @@ networks:
 # =============================================================================
 volumes:
   postgres-data:
-    name: postgres-data
+    driver: local
+    name: data-platform-postgres
+  ldap-data:
+    driver: local
+    name: data-platform-ldap
+  ldap-config:
+    driver: local
+    name: data-platform-ldap-config

@@ -1,117 +1,70 @@
 """
-Apache Airflow - Configuração Webserver Empresarial
-===================================================
+Apache Airflow - Configuração Webserver Empresarial com LDAP
+============================================================
 
 Ambiente de produção com:
-- Azure Entra ID SSO obrigatório
+- Autenticação LDAP unificada
 - Flask-AppBuilder 5.x
-- Autenticação OAuth2/OpenID Connect
+- Sincronização de roles via grupos LDAP
 
 Autor: Plataforma de Dados Bomgado
-Data: 2026-06-06
+Data: 2026-06-08
 """
 
 import os
-from flask_appbuilder.security.manager import AUTH_OAUTH
+from flask_appbuilder.security.manager import AUTH_LDAP
 from airflow.www.security import AirflowSecurityManager
 
 # =============================================================================
-# AZURE ENTRA ID SSO (OAuth 2.0)
+# AUTENTICAÇÃO LDAP
 # =============================================================================
 
-AUTH_TYPE = AUTH_OAUTH
+AUTH_TYPE = AUTH_LDAP
 
-OAUTH_PROVIDERS = [
-    {
-        'name': 'azure',
-        'icon': 'fa-windows',
-        'token_key': 'access_token',
-        'remote_app': {
-            'client_id': os.getenv('AZURE_AIRFLOW_CLIENT_ID'),
-            'client_secret': os.getenv('AZURE_AIRFLOW_CLIENT_SECRET'),
-            'api_base_url': 'https://graph.microsoft.com/v1.0/',
-            'client_kwargs': {
-                'scope': 'openid email profile User.Read'
-            },
-            'access_token_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/token",
-            'authorize_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/oauth2/v2.0/authorize",
-            'server_metadata_url': f"https://login.microsoftonline.com/{os.getenv('AZURE_TENANT_ID')}/v2.0/.well-known/openid-configuration",
-        }
-    }
-]
+# Configuração do servidor LDAP
+AUTH_LDAP_SERVER = f"ldap://{os.getenv('LDAP_HOST', 'openldap')}:{os.getenv('LDAP_PORT', '389')}"
 
-# Auto-registrar usuários no primeiro login SSO
+# Base DN para busca de usuários
+AUTH_LDAP_SEARCH = os.getenv('LDAP_BASE_DN', 'dc=bomgado,dc=local')
+
+# Campo usado como username (uid, cn, sAMAccountName, etc.)
+AUTH_LDAP_UID_FIELD = 'uid'
+
+# Bind DN para autenticação (usuário com permissão de leitura)
+AUTH_LDAP_BIND_USER = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=bomgado,dc=local')
+AUTH_LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', os.getenv('LDAP_ADMIN_PASSWORD'))
+
+# Permitir autenticação direta (bind direto com DN do usuário)
+AUTH_LDAP_BIND_FIRST = True
+
+# Mapeamento de atributos LDAP para campos do Airflow
+AUTH_LDAP_FIRSTNAME_FIELD = 'givenName'
+AUTH_LDAP_LASTNAME_FIELD = 'sn'
+AUTH_LDAP_EMAIL_FIELD = 'mail'
+
+# Registrar automaticamente novos usuários do LDAP
 AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Viewer"  # Roles disponíveis: Admin, Op, User, Viewer, Public
+AUTH_USER_REGISTRATION_ROLE = "Viewer"  # Role padrão para novos usuários
 
-# =============================================================================
-# SECURITY MANAGER CUSTOMIZADO
-# =============================================================================
-
-class AzureSecurityManager(AirflowSecurityManager):
-    """
-    Security Manager customizado para integração com Azure Entra ID
-    """
-    
-    def oauth_user_info(self, provider, response=None):
-        """
-        Extrai informações do usuário do token OAuth do Azure AD
-        
-        Args:
-            provider (str): Nome do provider OAuth ('azure')
-            response (dict): Response do OAuth contendo access_token
-            
-        Returns:
-            dict: Informações do usuário para criação/atualização
-        """
-        if provider == 'azure':
-            import requests
-            
-            access_token = response.get('access_token')
-            
-            # Obter dados do usuário via Microsoft Graph API
-            me = requests.get(
-                'https://graph.microsoft.com/v1.0/me',
-                headers={'Authorization': f'Bearer {access_token}'}
-            ).json()
-            
-            # Mapear usuário para role padrão
-            # Para mapear grupos do Azure AD para roles, consulte documentação
-            return {
-                'username': me.get('userPrincipalName', '').split('@')[0],
-                'name': me.get('displayName', ''),
-                'email': me.get('mail') or me.get('userPrincipalName'),
-                'first_name': me.get('givenName', ''),
-                'last_name': me.get('surname', ''),
-                'role_keys': ['Viewer'],  # Role padrão para novos usuários
-            }
-        
-        return {}
-
-SECURITY_MANAGER_CLASS = AzureSecurityManager
-
-# =============================================================================
-# MAPEAMENTO DE GRUPOS AZURE AD PARA ROLES (OPCIONAL)
-# =============================================================================
-
-# Descomentar e configurar se quiser mapear grupos do Azure AD para roles do Airflow
+# Mapeamento de grupos LDAP para roles do Airflow
 # Roles disponíveis: Admin, Op, User, Viewer, Public
-# 
-# AUTH_ROLES_MAPPING = {
-#     "Airflow-Admins": ["Admin"],
-#     "Airflow-Operators": ["Op"],
-#     "Airflow-Users": ["User"],
-#     "Airflow-Viewers": ["Viewer"],
-# }
-# 
-# # Sincronizar roles a cada login
-# AUTH_ROLES_SYNC_AT_LOGIN = True
+AUTH_ROLES_MAPPING = {
+    'cn=admins,ou=groups,dc=bomgado,dc=local': ['Admin'],
+    'cn=analysts,ou=groups,dc=bomgado,dc=local': ['Op', 'User'],
+    'cn=viewers,ou=groups,dc=bomgado,dc=local': ['Viewer']
+}
+
+# Sincronizar roles a cada login
+AUTH_ROLES_SYNC_AT_LOGIN = True
+
+# LDAP TLS (desabilitado pois Cloudflare gerencia TLS)
+AUTH_LDAP_USE_TLS = False
 
 # =============================================================================
 # CONFIGURAÇÕES DE SEGURANÇA
 # =============================================================================
 
-# Sem acesso público - SSO obrigatório
+# Sem acesso público - autenticação obrigatória
 # AUTH_ROLE_PUBLIC não definido = força autenticação
 
 # CSRF Protection
@@ -125,17 +78,16 @@ WTF_CSRF_TIME_LIMIT = None
 # Timeout de sessão: 12 horas
 PERMANENT_SESSION_LIFETIME = 43200
 
-# Configurações de cookies
+# Configurações de cookies (Cloudflare Tunnel termina SSL)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = False  # Cloudflare Tunnel termina SSL, backend é HTTP
+SESSION_COOKIE_SECURE = True
 
 # =============================================================================
 # LOGGING
 # =============================================================================
 
 import logging
-from logging.handlers import RotatingFileHandler
 
 # Nível de log
 LOG_LEVEL = logging.INFO

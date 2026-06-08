@@ -1,369 +1,318 @@
 #!/bin/bash
+# =============================================================================
+# Script de Instalação Automatizada - Plataforma de Dados
+# =============================================================================
+# Instala ambiente completo em Ubuntu zerado (24.04 ou 22.04)
 #
-# install.sh - Instalação Automatizada - Plataforma de Dados Enterprise
-# ========================================================================
+# Componentes:
+# - Docker Engine + Compose
+# - PostgreSQL 15, Redis 7, OpenLDAP
+# - Apache Superset 6.1.0, Airflow 2.8.0, Hop 2.7.0
+# - phpLDAPadmin
 #
-# Instala e configura:
-#   - Docker e Docker Compose
-#   - Cloudflare Tunnel
-#   - Apache Superset 6.1.0
-#   - Apache Airflow 2.8.0
-#   - Apache Hop 2.7.0
-#   - PostgreSQL 15 + Redis 7
-#   - Nginx reverse proxy
-#
-# Uso:
-#   ./install.sh
-#
-# Pré-requisitos:
-#   - Ubuntu 24.04 ou 22.04
-#   - Usuário com sudo
-#   - Arquivo .env configurado com credenciais Azure
-#   - Token Cloudflare Tunnel pronto
-#
-# ========================================================================
+# Uso: sudo bash install.sh
+# =============================================================================
 
-set -e  # Exit on error
+set -e
+set -o pipefail
 
 # Cores
-RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Símbolos
-CHECK="${GREEN}✓${NC}"
-CROSS="${RED}✗${NC}"
-ARROW="${CYAN}→${NC}"
-INFO="${BLUE}ℹ${NC}"
+# Banner
+clear
+echo -e "${BLUE}================================================================${NC}"
+echo -e "${BLUE}                                                                ${NC}"
+echo -e "${BLUE}   ██████╗  █████╗ ████████╗ █████╗     ██████╗ ██╗      ███${NC}"
+echo -e "${BLUE}   ██╔══██╗██╔══██╗╚══██╔══╝██╔══██╗    ██╔══██╗██║     ██╔═${NC}"
+echo -e "${BLUE}   ██║  ██║███████║   ██║   ███████║    ██████╔╝██║     ████${NC}"
+echo -e "${BLUE}   ██║  ██║██╔══██║   ██║   ██╔══██║    ██╔═══╝ ██║     ██╔═${NC}"
+echo -e "${BLUE}   ██████╔╝██║  ██║   ██║   ██║  ██║    ██║     ███████╗██║ ${NC}"
+echo -e "${BLUE}   ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝    ╚═╝     ╚══════╝╚═╝ ${NC}"
+echo -e "${BLUE}                                                                ${NC}"
+echo -e "${BLUE}        Plataforma de Dados - Instalação Automatizada           ${NC}"
+echo -e "${BLUE}================================================================${NC}"
+echo ""
 
-# ========================================================================
-# FUNÇÕES AUXILIARES
-# ========================================================================
+# Verificar root
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}❌ Execute como root: sudo bash install.sh${NC}"
+  exit 1
+fi
 
-log_info() {
-    echo -e "${INFO} $1"
-}
+# Verificar Ubuntu
+if ! grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
+    echo -e "${YELLOW}⚠ Sistema não é Ubuntu oficial. Continuando...${NC}"
+fi
 
-log_success() {
-    echo -e "${CHECK} $1"
-}
+# Verificar RAM
+RAM_GB=$(free -g | awk '/^Mem:/{print $2}')
+if [ "$RAM_GB" -lt 7 ]; then
+    echo -e "${YELLOW}⚠ RAM detectada: ${RAM_GB}GB (mínimo 8GB recomendado)${NC}"
+fi
 
-log_error() {
-    echo -e "${CROSS} $1"
-}
+echo -e "${GREEN}✓ Pré-requisitos verificados${NC}"
+echo ""
 
-log_step() {
-    echo ""
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}========================================${NC}"
-}
+# =============================================================================
+# 1. ATUALIZAR SISTEMA
+# =============================================================================
+echo -e "${YELLOW}[1/8] Atualizando sistema...${NC}"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq > /dev/null 2>&1
+apt-get upgrade -y -qq > /dev/null 2>&1
+apt-get install -y -qq curl wget git jq python3 python3-pip net-tools ca-certificates gnupg lsb-release > /dev/null 2>&1
+echo -e "${GREEN}✓ Sistema atualizado${NC}"
 
-check_ubuntu() {
-    if [ ! -f /etc/os-release ]; then
-        log_error "Sistema operacional não identificado"
-        exit 1
+# =============================================================================
+# 2. INSTALAR DOCKER
+# =============================================================================
+echo -e "${YELLOW}[2/8] Instalando Docker Engine...${NC}"
+
+# Remover versões antigas
+apt-get remove -y -qq docker docker-engine docker.io containerd runc > /dev/null 2>&1 || true
+
+# GPG key
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Repositório
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar
+apt-get update -qq > /dev/null 2>&1
+apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
+
+# Verificar
+if docker --version > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then
+    DOCKER_VER=$(docker --version | cut -d' ' -f3 | tr -d ',')
+    COMPOSE_VER=$(docker compose version | awk '{print $4}')
+    echo -e "${GREEN}✓ Docker $DOCKER_VER + Compose $COMPOSE_VER instalados${NC}"
+else
+    echo -e "${RED}❌ Erro ao instalar Docker${NC}"
+    exit 1
+fi
+
+# Iniciar Docker
+systemctl enable docker > /dev/null 2>&1
+systemctl start docker
+
+# =============================================================================
+# 3. GERAR SECRETS
+# =============================================================================
+echo -e "${YELLOW}[3/8] Configurando .env e secrets...${NC}"
+
+if [ ! -f .env ]; then
+    cp .env.example .env
+    
+    # Gerar secrets fortes
+    if [ -f generate_secrets.py ]; then
+        python3 generate_secrets.py 2>/dev/null || {
+            # Fallback manual
+            SUPERSET_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(42))" 2>/dev/null || openssl rand -base64 42)
+            AIRFLOW_FERNET=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
+            AIRFLOW_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
+            LDAP_ADMIN_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            LDAP_CONFIG_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            LDAP_RO_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            REDIS_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            POSTGRES_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            
+            sed -i "s/changeme_superset_secret_key_min_42_chars_recommended/${SUPERSET_SECRET}/" .env
+            sed -i "s/changeme_generate_with_python_cryptography_fernet/${AIRFLOW_FERNET}/" .env
+            sed -i "s/changeme_secret_key_airflow_webserver/${AIRFLOW_SECRET}/" .env
+            sed -i "s/changeme_ldap_admin_password/${LDAP_ADMIN_PW}/" .env
+            sed -i "s/changeme_ldap_config_password/${LDAP_CONFIG_PW}/" .env
+            sed -i "s/changeme_readonly_password/${LDAP_RO_PW}/" .env
+            sed -i "s/changeme_redis_password/${REDIS_PW}/" .env
+            sed -i "s/changeme_strong_password/${POSTGRES_PW}/g" .env
+        }
     fi
     
-    . /etc/os-release
-    
-    if [[ "$ID" != "ubuntu" ]]; then
-        log_error "Este script é para Ubuntu. Detectado: $ID"
-        exit 1
-    fi
-    
-    if [[ ! "$VERSION_ID" =~ ^(24.04|22.04|20.04)$ ]]; then
-        log_error "Versão do Ubuntu não suportada: $VERSION_ID"
-        log_info "Versões suportadas: 24.04, 22.04, 20.04"
-        exit 1
-    fi
-    
-    log_success "Ubuntu $VERSION_ID detectado"
+    echo -e "${GREEN}✓ .env criado com secrets gerados${NC}"
+else
+    echo -e "${GREEN}✓ .env existente mantido${NC}"
+fi
+
+# =============================================================================
+# 4. CRIAR DIRETÓRIOS
+# =============================================================================
+echo -e "${YELLOW}[4/8] Criando estrutura de diretórios...${NC}"
+
+mkdir -p airflow/{logs,dags,plugins,config}
+mkdir -p superset/{config,data}
+mkdir -p hop/{config,projects,metadata}
+mkdir -p postgres/init-scripts
+mkdir -p shared/data
+mkdir -p ldap
+
+# Permissões Airflow (UID 50000)
+chown -R 50000:0 airflow/ 2>/dev/null || true
+
+echo -e "${GREEN}✓ Diretórios criados${NC}"
+
+# =============================================================================
+# 5. BUILD IMAGEM SUPERSET
+# =============================================================================
+echo -e "${YELLOW}[5/8] Buildando imagem customizada do Superset...${NC}"
+echo -e "${BLUE}   (pode levar 3-5 minutos)${NC}"
+
+docker compose build --no-cache superset-init > build.log 2>&1 || {
+    echo -e "${RED}❌ Erro no build. Ver: build.log${NC}"
+    exit 1
 }
 
-check_sudo() {
-    if ! sudo -n true 2>/dev/null; then
-        log_error "Este script precisa de permissões sudo"
-        log_info "Execute: sudo -v"
-        exit 1
-    fi
-    log_success "Permissões sudo verificadas"
+echo -e "${GREEN}✓ Imagem superset-custom:latest buildada${NC}"
+rm -f build.log
+
+# =============================================================================
+# 6. INICIAR CONTAINERS
+# =============================================================================
+echo -e "${YELLOW}[6/8] Iniciando containers...${NC}"
+
+docker compose up -d 2>&1 | grep -v "WARNING: The" || true
+
+echo -e "${GREEN}✓ Containers iniciados${NC}"
+
+# =============================================================================
+# 7. AGUARDAR INICIALIZAÇÃO
+# =============================================================================
+echo -e "${YELLOW}[7/8] Aguardando inicialização (5-10 min primeira vez)...${NC}"
+
+# Função de health check
+check_health() {
+    docker inspect --format='{{.State.Health.Status}}' "$1" 2>/dev/null || echo "starting"
 }
 
-check_env_file() {
-    if [ ! -f .env ]; then
-        log_error "Arquivo .env não encontrado"
-        log_info "Execute: cp .env.example .env"
-        log_info "Depois edite .env com suas credenciais Azure"
-        exit 1
-    fi
-    
-    # Verificar se variáveis Azure estão configuradas
-    source .env
-    
-    if [ -z "$AZURE_TENANT_ID" ] || [ "$AZURE_TENANT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
-        log_error "AZURE_TENANT_ID não configurado no .env"
-        exit 1
-    fi
-    
-    if [ -z "$AZURE_SUPERSET_CLIENT_ID" ] || [ "$AZURE_SUPERSET_CLIENT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
-        log_error "AZURE_SUPERSET_CLIENT_ID não configurado no .env"
-        exit 1
-    fi
-    
-    if [ -z "$AZURE_SUPERSET_CLIENT_SECRET" ] || [ "$AZURE_SUPERSET_CLIENT_SECRET" == "<OBTER_DO_AZURE_PORTAL>" ]; then
-        log_error "AZURE_SUPERSET_CLIENT_SECRET não configurado no .env"
-        exit 1
-    fi
-    
-    if [ -z "$AZURE_AIRFLOW_CLIENT_ID" ] || [ "$AZURE_AIRFLOW_CLIENT_ID" == "<OBTER_DO_AZURE_PORTAL>" ]; then
-        log_error "AZURE_AIRFLOW_CLIENT_ID não configurado no .env"
-        exit 1
-    fi
-    
-    if [ -z "$AZURE_AIRFLOW_CLIENT_SECRET" ] || [ "$AZURE_AIRFLOW_CLIENT_SECRET" == "<OBTER_DO_AZURE_PORTAL>" ]; then
-        log_error "AZURE_AIRFLOW_CLIENT_SECRET não configurado no .env"
-        exit 1
-    fi
-    
-    log_success "Arquivo .env configurado corretamente"
-}
+# OpenLDAP
+echo -n "   OpenLDAP... "
+for i in {1..60}; do
+    [ "$(check_health openldap)" = "healthy" ] && { echo -e "${GREEN}OK${NC}"; break; }
+    sleep 2
+done
 
-# ========================================================================
-# INSTALAÇÃO
-# ========================================================================
+# PostgreSQL
+echo -n "   PostgreSQL... "
+for i in {1..60}; do
+    [ "$(check_health postgres)" = "healthy" ] && { echo -e "${GREEN}OK${NC}"; break; }
+    sleep 2
+done
 
-install_docker() {
-    log_step "PASSO 1: Instalando Docker"
-    
-    if command -v docker &> /dev/null; then
-        log_info "Docker já instalado: $(docker --version)"
-        return
-    fi
-    
-    log_info "Atualizando repositórios..."
-    sudo apt-get update -qq
-    
-    log_info "Instalando dependências..."
-    sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
-    
-    log_info "Adicionando chave GPG do Docker..."
-    sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
-    
-    log_info "Adicionando repositório Docker..."
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" | \
-      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    log_info "Instalando Docker Engine..."
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    
-    log_info "Adicionando usuário ao grupo docker..."
-    sudo usermod -aG docker $USER
-    
-    log_success "Docker instalado: $(docker --version)"
-    log_info "IMPORTANTE: Será necessário fazer logout/login para usar docker sem sudo"
-}
+# Redis
+echo -n "   Redis... "
+for i in {1..60}; do
+    [ "$(check_health redis)" = "healthy" ] && { echo -e "${GREEN}OK${NC}"; break; }
+    sleep 2
+done
 
-install_cloudflare_tunnel() {
-    log_step "PASSO 2: Instalando Cloudflare Tunnel"
-    
-    if command -v cloudflared &> /dev/null; then
-        log_info "Cloudflare Tunnel já instalado: $(cloudflared --version)"
-        return
-    fi
-    
-    log_info "Baixando cloudflared..."
-    wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-    
-    log_info "Instalando cloudflared..."
-    sudo dpkg -i cloudflared-linux-amd64.deb
-    
-    log_info "Limpando arquivo de instalação..."
-    rm -f cloudflared-linux-amd64.deb
-    
-    log_success "Cloudflare Tunnel instalado"
-    
-    # Configurar tunnel
-    echo ""
-    log_info "Configure o Cloudflare Tunnel agora:"
-    echo -e "${YELLOW}1. Acesse https://one.dash.cloudflare.com/${NC}"
-    echo -e "${YELLOW}2. Crie um Tunnel${NC}"
-    echo -e "${YELLOW}3. Copie o token de instalação${NC}"
-    echo ""
-    read -p "Cole o token do Cloudflare Tunnel: " CLOUDFLARE_TOKEN
-    
-    if [ -z "$CLOUDFLARE_TOKEN" ]; then
-        log_error "Token não fornecido. Você pode configurar depois com:"
-        log_info "sudo cloudflared service install <TOKEN>"
-        return
-    fi
-    
-    log_info "Instalando serviço do tunnel..."
-    sudo cloudflared service install $CLOUDFLARE_TOKEN
-    
-    log_info "Iniciando cloudflared..."
-    sudo systemctl start cloudflared
-    sudo systemctl enable cloudflared
-    
-    log_success "Cloudflare Tunnel configurado e ativo"
-}
+echo "   Aguardando init containers (2 min)..."
+sleep 120
 
-build_superset_image() {
-    log_step "PASSO 3: Build da Imagem Superset"
-    
-    log_info "Construindo imagem customizada do Superset..."
-    docker compose build superset-init
-    
-    log_success "Imagem superset-custom:latest criada"
-}
+# Superset
+echo -n "   Superset... "
+for i in {1..120}; do
+    [ "$(check_health superset)" = "healthy" ] && { echo -e "${GREEN}OK${NC}"; break; }
+    sleep 2
+done
 
-start_infrastructure() {
-    log_step "PASSO 4: Iniciando Infraestrutura Base"
-    
-    log_info "Iniciando PostgreSQL e Redis..."
-    docker compose up -d postgres redis
-    
-    log_info "Aguardando PostgreSQL ficar healthy (30s)..."
-    sleep 30
-    
-    # Verificar se PostgreSQL está saudável
-    if ! docker compose ps postgres | grep -q "healthy"; then
-        log_error "PostgreSQL não está healthy"
-        log_info "Verifique logs: docker compose logs postgres"
-        exit 1
-    fi
-    
-    log_success "PostgreSQL e Redis iniciados"
-}
+# Airflow
+echo -n "   Airflow... "
+for i in {1..120}; do
+    [ "$(check_health airflow-webserver)" = "healthy" ] && { echo -e "${GREEN}OK${NC}"; break; }
+    sleep 2
+done
 
-initialize_databases() {
-    log_step "PASSO 5: Inicializando Bancos de Dados"
-    
-    log_info "Executando migrations do Airflow e Superset..."
-    docker compose up -d airflow-init superset-init
-    
-    log_info "Aguardando migrations completarem (60s)..."
-    sleep 60
-    
-    # Verificar se init containers completaram
-    AIRFLOW_INIT_EXIT=$(docker compose ps airflow-init --format json | grep -o '"ExitCode":[0-9]*' | cut -d':' -f2)
-    SUPERSET_INIT_EXIT=$(docker compose ps superset-init --format json | grep -o '"ExitCode":[0-9]*' | cut -d':' -f2)
-    
-    if [ "$AIRFLOW_INIT_EXIT" != "0" ]; then
-        log_error "Airflow init falhou"
-        log_info "Logs: docker compose logs airflow-init"
-    else
-        log_success "Airflow database inicializado"
-    fi
-    
-    if [ "$SUPERSET_INIT_EXIT" != "0" ]; then
-        log_error "Superset init falhou"
-        log_info "Logs: docker compose logs superset-init"
-    else
-        log_success "Superset database inicializado"
-    fi
-}
+# =============================================================================
+# 8. VALIDAÇÃO FINAL
+# =============================================================================
+echo -e "${YELLOW}[8/8] Validando instalação...${NC}"
 
-start_all_services() {
-    log_step "PASSO 6: Iniciando Todos os Serviços"
-    
-    log_info "Iniciando Airflow, Superset, Hop e Nginx..."
-    docker compose up -d
-    
-    log_info "Aguardando serviços ficarem healthy (30s)..."
-    sleep 30
-    
-    log_success "Todos os serviços iniciados"
-}
+RUNNING=$(docker compose ps --format json 2>/dev/null | jq -r 'select(.State == "running") | .Name' | wc -l)
+echo -e "${GREEN}✓ $RUNNING containers rodando${NC}"
 
-show_status() {
-    log_step "STATUS DOS SERVIÇOS"
-    
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
-}
+# =============================================================================
+# FINALIZAÇÃO
+# =============================================================================
+echo ""
+echo -e "${GREEN}================================================================${NC}"
+echo -e "${GREEN}                  🎉 INSTALAÇÃO CONCLUÍDA! 🎉                   ${NC}"
+echo -e "${GREEN}================================================================${NC}"
+echo ""
 
-show_completion_message() {
-    echo ""
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO!${NC}"
-    echo -e "${GREEN}========================================${NC}"
-    echo ""
-    echo -e "${CYAN}Acesse as aplicações:${NC}"
-    echo -e "  • Superset: ${BLUE}https://$PUBLIC_DOMAIN${NC}"
-    echo -e "  • Airflow:  ${BLUE}https://airflow.$PUBLIC_DOMAIN${NC}"
-    echo -e "  • Hop:      ${BLUE}https://hop.$PUBLIC_DOMAIN${NC}"
-    echo ""
-    echo -e "${YELLOW}Próximos passos:${NC}"
-    echo "  1. Configure rotas do Cloudflare Tunnel:"
-    echo "     - bi.$PUBLIC_DOMAIN → nginx:80"
-    echo "     - airflow.$PUBLIC_DOMAIN → nginx:8080"
-    echo "     - hop.$PUBLIC_DOMAIN → nginx:8081"
-    echo ""
-    echo "  2. Acesse https://$PUBLIC_DOMAIN e faça login com Azure AD"
-    echo ""
-    echo "  3. Primeiro usuário será criado automaticamente como Gamma"
-    echo "     Admin deve elevar permissões via interface web"
-    echo ""
-    echo -e "${CYAN}Comandos úteis:${NC}"
-    echo "  • Ver logs:     docker compose logs -f <serviço>"
-    echo "  • Status:       docker compose ps"
-    echo "  • Restart:      docker compose restart <serviço>"
-    echo "  • Parar tudo:   docker compose down"
-    echo ""
-    echo -e "${YELLOW}Documentação completa: INSTALL.md${NC}"
-    echo ""
-}
+# Obter IP do servidor
+SERVER_IP=$(hostname -I | awk '{print $1}')
 
-# ========================================================================
-# MAIN
-# ========================================================================
+echo -e "${YELLOW}📡 Acesse localmente (antes de configurar Cloudflare):${NC}"
+echo ""
+echo "  🔹 Superset:     http://${SERVER_IP}:8088"
+echo "  🔹 Airflow:      http://${SERVER_IP}:8080"
+echo "  🔹 Hop:          http://${SERVER_IP}:8081"
+echo "  🔹 phpLDAPadmin: http://${SERVER_IP}:8082"
+echo ""
 
-main() {
-    clear
-    
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  Plataforma de Dados Enterprise${NC}"
-    echo -e "${BLUE}  Instalação Automatizada${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    
-    # Pré-requisitos
-    log_step "VERIFICANDO PRÉ-REQUISITOS"
-    check_ubuntu
-    check_sudo
-    check_env_file
-    
-    # Carregar variáveis do .env
-    source .env
-    
-    # Instalação
-    install_docker
-    install_cloudflare_tunnel
-    build_superset_image
-    start_infrastructure
-    initialize_databases
-    start_all_services
-    
-    # Status
-    show_status
-    
-    # Mensagem final
-    show_completion_message
-    
-    # Aviso sobre reinicialização
-    echo -e "${YELLOW}ATENÇÃO:${NC}"
-    echo "  Após este script, faça logout/login para usar docker sem sudo"
-    echo "  Ou execute: newgrp docker"
-    echo ""
-}
+echo -e "${YELLOW}🔑 Login LDAP padrão:${NC}"
+echo "  Username: admin"
+echo "  Password: admin123"
+echo ""
 
-# Executar
-main "$@"
+echo -e "${YELLOW}🔐 Acesso phpLDAPadmin:${NC}"
+echo "  Login DN: cn=admin,dc=bomgado,dc=local"
+echo "  Password: (veja LDAP_ADMIN_PASSWORD no .env)"
+echo ""
+
+echo -e "${YELLOW}📚 Próximos passos:${NC}"
+echo ""
+echo "  1️⃣  Configure Cloudflare Tunnel para HTTPS externo:"
+echo "     • bi.seudominio.com.br → http://localhost:8088"
+echo "     • airflow.seudominio.com.br → http://localhost:8080"
+echo "     • hop.seudominio.com.br → http://localhost:8081"
+echo "     • ldap.seudominio.com.br → http://localhost:8082"
+echo ""
+echo "  2️⃣  Acesse phpLDAPadmin e crie usuários:"
+echo "     • Navegue até ou=users,dc=bomgado,dc=local"
+echo "     • Create new entry → inetOrgPerson"
+echo "     • Adicione aos grupos (admins, analysts, viewers)"
+echo ""
+echo "  3️⃣  TROQUE senhas padrão (IMPORTANTE!):"
+echo "     • Edite .env e altere:"
+echo "       - LDAP_ADMIN_PASSWORD"
+echo "       - POSTGRES_PASSWORD"
+echo "       - REDIS_PASSWORD"
+echo "     • Depois: docker compose down && docker compose up -d"
+echo ""
+echo "  4️⃣  Configure backup automático dos volumes"
+echo ""
+
+echo -e "${GREEN}📖 Documentação completa: README.md${NC}"
+echo -e "${GREEN}🐛 Logs: docker compose logs -f${NC}"
+echo -e "${GREEN}📊 Status: docker compose ps${NC}"
+echo ""
+
+# Salvar credenciais em arquivo seguro
+CREDS_FILE=".credentials-$(date +%Y%m%d-%H%M%S).txt"
+cat > "$CREDS_FILE" << EOF
+# Credenciais Geradas - $(date)
+# GUARDE ESTE ARQUIVO COM SEGURANÇA E DELETE APÓS ANOTAR!
+
+LDAP Admin Password: $(grep LDAP_ADMIN_PASSWORD .env | cut -d'=' -f2)
+PostgreSQL Password: $(grep POSTGRES_PASSWORD= .env | head -1 | cut -d'=' -f2)
+Redis Password: $(grep REDIS_PASSWORD .env | cut -d'=' -f2)
+
+Superset Admin: admin / admin123 (TROQUE!)
+Airflow Admin: admin / admin123 (TROQUE!)
+LDAP Admin: admin / admin123 (TROQUE!)
+
+Server IP: ${SERVER_IP}
+EOF
+
+chmod 600 "$CREDS_FILE"
+echo -e "${YELLOW}💾 Credenciais salvas em: ${CREDS_FILE}${NC}"
+echo -e "${RED}   ⚠ DELETE este arquivo após anotar as senhas!${NC}"
+echo ""
