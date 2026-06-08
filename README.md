@@ -156,7 +156,42 @@ dc=bomgado,dc=local
    - Consulte o arquivo `.credentials-XXXXXX.txt` gerado durante instalação
 4. **Segurança:** Acesso anônimo está DESABILITADO (autenticação obrigatória)
 
-### Adicionar Novo Usuário
+---
+
+## 👤 Gerenciamento de Usuários
+
+### Método Simplificado (Recomendado) ⚡
+
+O jeito mais fácil e rápido de criar usuários é usando o script automatizado:
+
+```bash
+# Via Make (mais simples)
+make user
+
+# Ou diretamente
+bash scripts/create-user.sh
+```
+
+**O script interativo pergunta:**
+- ✅ Nome completo
+- ✅ Username (uid)
+- ✅ Email
+- ✅ Senha (com confirmação)
+- ✅ Grupo/perfil (Administrador, Analista ou Visualizador)
+
+**Saída:** Credenciais formatadas prontas para enviar ao usuário!
+
+**Outros comandos úteis:**
+```bash
+make list-users         # Lista todos os usuários
+make list-groups        # Lista grupos e membros
+make delete-user        # Remove um usuário
+make test-user-login    # Testa credenciais de login
+```
+
+---
+
+### Adicionar Novo Usuário (Métodos Alternativos)
 
 **Via phpLDAPadmin (Interface Web):**
 1. Navegue até `ou=users,dc=bomgado,dc=local`

@@ -11,7 +11,7 @@
 #   make clean    - Limpar todos os containers e volumes
 # =============================================================================
 
-.PHONY: help setup up down restart logs clean status secrets airflow superset hop
+.PHONY: help setup up down restart logs clean status secrets airflow superset hop user list-users delete-user
 
 # Comando padrão
 .DEFAULT_GOAL := help
@@ -145,6 +145,31 @@ install-deps: ## Instala dependências Python no Airflow
 	@read package && \
 		docker exec airflow-webserver pip install $$package && \
 		echo "$(GREEN)✓ Pacote $$package instalado!$(NC)"
+
+# =============================================================================
+# Gerenciamento de Usuários LDAP
+# =============================================================================
+
+user: ## Cria novo usuário LDAP (simplificado)
+	@echo "$(GREEN)Criando novo usuário LDAP...$(NC)"
+	@bash scripts/create-user.sh
+
+list-users: ## Lista todos os usuários LDAP
+	@echo "$(GREEN)Usuários cadastrados no LDAP:$(NC)"
+	@echo ""
+	@bash scripts/list-users.sh
+
+list-groups: ## Lista grupos e seus membros
+	@echo "$(GREEN)Grupos LDAP e seus membros:$(NC)"
+	@echo ""
+	@bash scripts/list-groups.sh
+
+delete-user: ## Remove um usuário LDAP
+	@echo "$(YELLOW)Digite o username do usuário a ser removido:$(NC)"
+	@bash scripts/delete-user.sh
+
+test-user-login: ## Testa login de um usuário LDAP
+	@bash scripts/test-user-login.sh
 
 git-ignore: ## Verifica se há arquivos sensíveis não ignorados
 	@echo "$(YELLOW)Verificando arquivos sensíveis...$(NC)"

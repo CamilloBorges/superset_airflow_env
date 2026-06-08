@@ -75,6 +75,33 @@ ou=services,dc=bomgado,dc=local  → Contas de serviço
 
 ## 🆕 Como Criar Novo Usuário LDAP
 
+### ⚡ Método Simplificado (Recomendado)
+
+**SSH no servidor e execute:**
+```bash
+cd ~/data-platform
+make user
+```
+
+O script interativo pergunta:
+- Nome completo
+- Username
+- Email
+- Senha (com confirmação)
+- Grupo (Admin/Analista/Visualizador)
+
+**Pronto!** O usuário é criado automaticamente com todas as configurações necessárias.
+
+**Outros comandos úteis:**
+```bash
+make list-users         # Lista todos os usuários
+make list-groups        # Lista grupos e membros  
+make delete-user        # Remove um usuário
+make test-user-login    # Testa credenciais
+```
+
+---
+
 ### Via phpLDAPadmin (Interface Web)
 
 1. **Acesse:** https://ldap.bomgado.com.br
