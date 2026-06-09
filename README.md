@@ -47,7 +47,9 @@ Ubuntu Server / Docker Host
 - LDAP Admin: https://ldap.bomgado.com.br
 
 **Autenticação Unificada:**
-- Todos os serviços (Superset, Airflow, Hop) autenticam via OpenLDAP
+- Superset e Airflow autenticam via OpenLDAP
+- Hop Server usa autenticação HTTP Basic local (HOP_SERVER_USER/HOP_SERVER_PASS)
+- Para SSO/LDAP no Hop, proteja o endpoint com Cloudflare Access ou proxy de autenticação
 - Gerenciamento centralizado de usuários e permissões
 - Sincronização automática de roles baseada em grupos LDAP
 

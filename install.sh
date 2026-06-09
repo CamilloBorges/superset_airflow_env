@@ -124,6 +124,7 @@ if [ ! -f .env ]; then
             LDAP_RO_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
             REDIS_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
             POSTGRES_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)
+            HOP_PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(20))" 2>/dev/null || openssl rand -base64 20)
             
             sed -i "s/changeme_superset_secret_key_min_42_chars_recommended/${SUPERSET_SECRET}/" .env
             sed -i "s/changeme_generate_with_python_cryptography_fernet/${AIRFLOW_FERNET}/" .env
@@ -133,6 +134,7 @@ if [ ! -f .env ]; then
             sed -i "s/changeme_readonly_password/${LDAP_RO_PW}/" .env
             sed -i "s/changeme_redis_password/${REDIS_PW}/" .env
             sed -i "s/changeme_strong_password/${POSTGRES_PW}/g" .env
+            sed -i "s/changeme_hop_server_password/${HOP_PW}/" .env
         }
     fi
     

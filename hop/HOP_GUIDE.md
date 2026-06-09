@@ -245,7 +245,7 @@ docker exec hop-server tail -f /opt/hop/logs/hop.log
 curl http://localhost:8081/
 
 # Listar configurações
-curl -u cluster:cluster http://localhost:8081/hop/listConfigurations
+curl -u "$HOP_SERVER_USER:$HOP_SERVER_PASS" http://localhost:8081/hop/listConfigurations
 ```
 
 ## 🌐 Volumes Compartilhados
